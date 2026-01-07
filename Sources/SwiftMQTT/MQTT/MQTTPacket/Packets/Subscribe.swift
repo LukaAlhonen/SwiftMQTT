@@ -1,22 +1,50 @@
+struct SubscribeVariableHeader {
+    var packetId: UInt16
+
+    init(packetId: UInt16) {
+        self.packetId = packetId
+    }
+
+    func encode() -> [UInt8] {
+        return encodeUInt16(self.packetId)
+    }
+}
+
+struct SubscribePayload {
+    var topicFilter: String
+    var qos: QoS
+
+    init(topicFilter: String, qos: QoS) {
+        self.topicFilter = topicFilter
+        self.qos = qos
+    }
+
+    func encode() -> [UInt8] {
+        var data: [UInt8] = []
+        data.append(contentsOf: encodeUInt16(UInt16(self.topicFilter.utf8.count)))
+        data.append(contentsOf: self.topicFilter.utf8)
+        data.append(self.qos.rawValue)
+
+        return data
+    }
+}
+
 struct MQTTSubscribePacket: MQTTControlPacket {
     var fixedHeader: FixedHeader
-    var varHeader: [UInt8]
-    var payload: [UInt8]
+    var varHeader: SubscribeVariableHeader
+    var payload: SubscribePayload
 
-    init(messageId: UInt16, topic: String) {
-        self.varHeader = encodeUInt16(messageId)
-        let encodedTopic = Array(topic.utf8)
-        self.payload = encodeUInt16(UInt16(encodedTopic.count))
-        self.payload.append(contentsOf: encodedTopic)
-        self.payload.append(0x00) // QoS 0
-        self.fixedHeader = FixedHeader(type: .SUBSCRIBE, flags: 0b0010, remainingLength: UInt(self.varHeader.count + self.payload.count))
+    init(packetId: UInt16 = 1, topic: String, qos: QoS) {
+        self.varHeader = SubscribeVariableHeader(packetId: packetId)
+        self.payload = SubscribePayload(topicFilter: topic, qos: qos)
+        self.fixedHeader = FixedHeader(type: .SUBSCRIBE, flags: 0b0010, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
     }
 
     func encode() -> [UInt8] {
         var data: [UInt8] = []
         data.append(contentsOf: fixedHeader.encode())
-        data.append(contentsOf: varHeader)
-        data.append(contentsOf: payload)
+        data.append(contentsOf: varHeader.encode())
+        data.append(contentsOf: payload.encode())
 
         return data
     }
