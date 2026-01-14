@@ -5,4 +5,8 @@ struct MQTTPubcompPacket: MQTTControlPacket {
     func encode() -> [UInt8] {
         return [0x00]
     }
+
+    func toString() -> String {
+        return ""
+    }
 }

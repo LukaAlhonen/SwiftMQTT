@@ -1,3 +1,8 @@
+struct TopicFilter: Hashable {
+    let topic: String
+    let qos: QoS
+}
+
 struct SubscribeVariableHeader {
     var packetId: UInt16
 
@@ -8,24 +13,34 @@ struct SubscribeVariableHeader {
     func encode() -> [UInt8] {
         return encodeUInt16(self.packetId)
     }
+
+    func toString() -> String {
+        return "packetId: \(self.packetId)"
+    }
 }
 
 struct SubscribePayload {
-    var topicFilter: String
-    var qos: QoS
+    var topics: [TopicFilter]
 
-    init(topicFilter: String, qos: QoS) {
-        self.topicFilter = topicFilter
-        self.qos = qos
+    init(topics: [TopicFilter]) {
+        self.topics = topics
     }
 
     func encode() -> [UInt8] {
         var data: [UInt8] = []
-        data.append(contentsOf: encodeUInt16(UInt16(self.topicFilter.utf8.count)))
-        data.append(contentsOf: self.topicFilter.utf8)
-        data.append(self.qos.rawValue)
+
+        for topicFilter in self.topics {
+            data.append(contentsOf: encodeUInt16(UInt16(topicFilter.topic.utf8.count)))
+            data.append(contentsOf: topicFilter.topic.utf8)
+            data.append(topicFilter.qos.rawValue)
+        }
 
         return data
+    }
+
+    func toString() -> String {
+        let s = self.topics.map { "topic: \($0.topic), QoS: \($0.qos)"}.joined(separator: ", ")
+        return s
     }
 }
 
@@ -34,9 +49,9 @@ struct MQTTSubscribePacket: MQTTControlPacket {
     var varHeader: SubscribeVariableHeader
     var payload: SubscribePayload
 
-    init(packetId: UInt16 = 1, topic: String, qos: QoS) {
+    init(packetId: UInt16 = 1, topics: [TopicFilter]) {
         self.varHeader = SubscribeVariableHeader(packetId: packetId)
-        self.payload = SubscribePayload(topicFilter: topic, qos: qos)
+        self.payload = SubscribePayload(topics: topics)
         self.fixedHeader = FixedHeader(type: .SUBSCRIBE, flags: 0b0010, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
     }
 
@@ -47,5 +62,9 @@ struct MQTTSubscribePacket: MQTTControlPacket {
         data.append(contentsOf: payload.encode())
 
         return data
+    }
+
+    func toString() -> String {
+        return "SUBSCRIBE [\(self.varHeader.toString())] [\(self.payload.toString())]"
     }
 }

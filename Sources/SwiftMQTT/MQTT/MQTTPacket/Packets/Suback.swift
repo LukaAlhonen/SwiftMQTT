@@ -1,24 +1,94 @@
-struct MQTTSubackPacket: MQTTControlPacket {
-    var fixedHeader: FixedHeader
-    var varHeader: [UInt8]
-    var payload: [UInt8]
+enum SubackReturnCode: UInt8 {
+    case QoS0 = 0x00
+    case QoS1 = 0x01
+    case QoS2 = 0x02
+    case Rejected = 0x80
 
-    init(_ data: [UInt8]) {
-        let headerFlags = data[0]
-        if (headerFlags != MQTTControlPacketType.SUBACK.rawValue) {
-            fatalError("Incorrect packet type: \(String(format: "%02X", headerFlags))")
+    func toString() -> String {
+        switch self {
+            case .QoS0:
+                return "QoS 0"
+            case .QoS1:
+                return "QoS 1"
+            case .QoS2:
+                return "QoS 2"
+            case .Rejected:
+                return "Rejected"
         }
+    }
+}
 
-        let (value, length) = decodeRemainigLength(data)
-        self.fixedHeader = FixedHeader(type: .SUBACK, flags: headerFlags & 0x0F, remainingLength: value)
+struct SubackPayload {
+    let returnCodes: [SubackReturnCode]
 
-        let varHeaderStart = length+1
-        let varHeaderStop = length+2
-        self.varHeader = Array(data[varHeaderStart...varHeaderStop])
-        self.payload = Array(data[varHeaderStop+1..<length])
+    init(bytes: [UInt8]) throws {
+        var codes: [SubackReturnCode] = []
+        for byte in bytes {
+            guard let code = SubackReturnCode(rawValue: byte) else {
+                throw MQTTError.DecodePacketError(message: "Invalid return code: \(byte)")
+            }
+            codes.append(code)
+        }
+        self.returnCodes = codes
     }
 
     func encode() -> [UInt8] {
-        return [0x00]
+        var bytes: [UInt8] = []
+
+        for code in self.returnCodes {
+            bytes.append(code.rawValue)
+        }
+
+        return bytes
+    }
+
+    func toString() -> String {
+        return self.returnCodes.map { $0.toString() }.joined(separator: ", ")
+    }
+}
+
+struct SubackVariableHeader {
+    let packetId: UInt16
+
+    init(packetId: UInt16) {
+        self.packetId = packetId
+    }
+
+    func encode() -> [UInt8] {
+        return encodeUInt16(self.packetId)
+    }
+}
+
+struct MQTTSubackPacket: MQTTControlPacket {
+    var fixedHeader: FixedHeader
+    var varHeader: SubackVariableHeader
+    var payload: SubackPayload
+
+    init(data: [UInt8]) throws {
+        let packetType = data[0] >> 4
+        if (packetType != MQTTControlPacketType.SUBACK.rawValue) {
+            throw MQTTError.DecodePacketError(message: "Invalid packet type: \(packetType)")
+        }
+
+        // payload len is msglen - 2
+        // let msglen = data[1]
+
+        let packetId = (UInt16(data[2]) << 8) | UInt16(data[3])
+        self.varHeader = SubackVariableHeader(packetId: packetId)
+        self.payload = try SubackPayload(bytes: [UInt8](data[4..<data.count]))
+        self.fixedHeader = FixedHeader(type: .SUBACK, flags: 0, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
+    }
+
+    func encode() -> [UInt8] {
+        var bytes: [UInt8] = []
+        bytes.append(contentsOf: self.fixedHeader.encode())
+        bytes.append(contentsOf: self.varHeader.encode())
+        bytes.append(contentsOf: self.payload.encode())
+
+        return bytes
+    }
+
+    func toString() -> String {
+        return "Suback, packetId: \(self.varHeader.packetId), \(self.payload.toString())"
     }
 }

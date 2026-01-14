@@ -1,25 +1,35 @@
+import Foundation
+
 struct ConnConnectFlags {
-    var username: Bool
-    var password: Bool
-    var willRetain: Bool
-    var qos: QoS
-    var willFlag: Bool
-    var cleanSession: Bool
+    let username: Bool
+    let password: Bool
+    let willRetain: Bool
+    let qos: QoS
+    let willFlag: Bool
+    let cleanSession: Bool
 
     init(
-        username: Bool = false,
-        password: Bool = false,
-        willRetain: Bool = false,
-        qos: QoS,
-        willFlag: Bool = false,
-        cleanSession: Bool = true
+        auth: Auth? = nil,
+        cleanSession: Bool = true,
+        lwt: LWT? = nil
     ) {
-        self.username = username
-        self.password = password
-        self.willRetain = willRetain
-        self.qos = qos
-        self.willFlag = willFlag
         self.cleanSession = cleanSession
+        if let lwt = lwt {
+            self.willFlag = true
+            self.willRetain = lwt.retain
+            self.qos = lwt.qos
+        } else {
+            self.willFlag = false
+            self.willRetain = false
+            self.qos = .AtMostOnce
+        }
+        if let auth = auth {
+            self.username = true
+            self.password = auth.password != nil ? true : false
+        } else {
+            self.username = false
+            self.password = false
+        }
     }
 
     func encode() -> UInt8 {
@@ -80,9 +90,21 @@ struct ConnVariableHeader {
 struct ConnPayload {
     var clientId: String
     var willTopic: String?
-    var willMessage: String?
+    var willMessage: Data?
     var username: String?
-    var password: String?
+    var password: Data?
+
+    init(clientId: String, lwt: LWT? = nil, auth: Auth? = nil) {
+        self.clientId = clientId
+        if let lwt = lwt {
+            self.willTopic = lwt.topic
+            self.willMessage = lwt.message
+        }
+        if let auth = auth {
+            self.username = auth.username
+            self.password = auth.password
+        }
+    }
 
     func encode() -> [UInt8] {
         var data: [UInt8] = []
@@ -97,7 +119,7 @@ struct ConnPayload {
 
         if let willMessage = self.willMessage {
             data.append(contentsOf: encodeUInt16(UInt16(willMessage.count)))
-            data.append(contentsOf: willMessage.utf8)
+            data.append(contentsOf: willMessage)
         }
 
         if let username = self.username {
@@ -107,7 +129,7 @@ struct ConnPayload {
 
         if let password = self.password {
             data.append(contentsOf: encodeUInt16(UInt16(password.count)))
-            data.append(contentsOf: password.utf8)
+            data.append(contentsOf: password)
         }
 
         return data
@@ -121,30 +143,23 @@ struct MQTTConnectPacket: MQTTControlPacket {
 
     init(
         clientId: String,
-        qos: QoS,
         keepAlive: UInt16,
-        username: String? = nil,
-        password: String? = nil,
-        willTopic: String? = nil,
-        willMessage: String? = nil,
-        willRetain: Bool = false,
+        lwt: LWT? = nil,
+        auth: Auth? = nil,
         cleanSession: Bool = true
     ) {
         self.varHeader = ConnVariableHeader(
             protocolName: "MQTT",
             protocolLevel: 4,
             connectFlags: ConnConnectFlags(
-                username: username != nil ? true : false,
-                password: username != nil ? true : false,
-                willRetain: willRetain,
-                qos: qos,
-                willFlag: willTopic != nil && willMessage != nil,
-                cleanSession: cleanSession
+                auth: auth,
+                cleanSession: cleanSession,
+                lwt: lwt
             ),
             keepAlive: 60
         )
 
-        self.payload = ConnPayload(clientId: clientId, willTopic: willTopic, willMessage: willMessage)
+        self.payload = ConnPayload(clientId: clientId, lwt: lwt, auth: auth)
         self.fixedHeader = FixedHeader(
             type: .CONNECT,
             flags: 0,
@@ -157,5 +172,9 @@ struct MQTTConnectPacket: MQTTControlPacket {
         data.append(contentsOf: self.varHeader.encode())
         data.append(contentsOf: self.payload.encode())
         return data
+    }
+
+    func toString() -> String {
+        return "CONNECT"
     }
 }

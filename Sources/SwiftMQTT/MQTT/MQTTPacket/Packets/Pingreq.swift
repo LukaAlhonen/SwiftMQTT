@@ -1,9 +1,15 @@
 struct MQTTPingreqPacket: MQTTControlPacket {
     var fixedHeader: FixedHeader
-    var varHeader: [UInt8]
-    var payload: [UInt8]
-    func encode() -> [UInt8] {
-        return [0x00]
+
+    init() {
+        self.fixedHeader = FixedHeader(type: .PINGREQ, flags: 0, remainingLength: 0)
     }
 
+    func encode() -> [UInt8] {
+        return self.fixedHeader.encode()
+    }
+
+    func toString() -> String {
+        return "PINGREQ"
+    }
 }

@@ -6,4 +6,8 @@ struct MQTTPublishPacket: MQTTControlPacket {
         return [0x00]
     }
 
+
+    func toString() -> String {
+        return ""
+    }
 }
