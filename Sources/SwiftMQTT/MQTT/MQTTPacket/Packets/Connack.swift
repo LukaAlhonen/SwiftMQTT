@@ -43,8 +43,8 @@ struct ConnackVariableHeader: Equatable {
         self.connectReturnCode = connectReturnCode
     }
 
-    func encode() -> [UInt8] {
-        var data: [UInt8] = []
+    func encode() -> ByteBuffer {
+        var data: ByteBuffer = []
 
         data.append(self.sessionPresent)
         data.append(self.connectReturnCode.rawValue)
@@ -57,7 +57,7 @@ struct MQTTConnackPacket: MQTTControlPacket {
     var fixedHeader: FixedHeader
     var varHeader: ConnackVariableHeader
 
-    init(data: [UInt8]) throws {
+    init(data: ByteBuffer) throws {
         let type: UInt8 = data[0] >> 4
         if (type != MQTTControlPacketType.CONNACK.rawValue) {
             throw DecodeConnackError.InvalidPacketType
@@ -80,8 +80,8 @@ struct MQTTConnackPacket: MQTTControlPacket {
         self.varHeader = ConnackVariableHeader(sessionPresent: data[2], connectReturnCode: connectionReturnCode)
     }
 
-    func encode() -> [UInt8] {
-        var data: [UInt8] = []
+    func encode() -> ByteBuffer {
+        var data: ByteBuffer = []
 
         data.append(contentsOf: self.fixedHeader.encode())
         data.append(contentsOf: self.varHeader.encode())
@@ -90,6 +90,6 @@ struct MQTTConnackPacket: MQTTControlPacket {
     }
 
     func toString() -> String {
-        return "CONNACK, session present: \(self.varHeader.sessionPresent), return code: \(self.varHeader.connectReturnCode.toString())"
+        return "\(self.fixedHeader.toString()), session present: \(self.varHeader.sessionPresent), return code: \(self.varHeader.connectReturnCode.toString())"
     }
 }

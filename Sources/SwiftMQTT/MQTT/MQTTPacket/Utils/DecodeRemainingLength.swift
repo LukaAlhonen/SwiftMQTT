@@ -1,4 +1,4 @@
-func decodeRemainigLength(_ data: [UInt8]) -> (value: UInt, length: Int) {
+func decodeRemainigLength(_ data: ByteBuffer) -> (value: UInt, length: Int) {
     var multiplier: UInt = 1
     var value: UInt = 0
     var index: Int = 1

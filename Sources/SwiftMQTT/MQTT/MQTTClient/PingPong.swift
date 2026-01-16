@@ -1,7 +1,6 @@
 import Dispatch
 import Foundation
 
-@MainActor
 class PingPong: @unchecked Sendable {
     var onPing: (() async -> Result<Void, MQTTError>)?
     var onPingTimeout: (() -> Void)?
@@ -36,7 +35,7 @@ class PingPong: @unchecked Sendable {
         while !Task.isCancelled {
             let reference = lastMessage
             let elapsed = Date().timeIntervalSince(reference)
-            let sleepTime = self.keepAlive - elapsed
+            let sleepTime = (self.keepAlive - elapsed) * 0.5 // only sleeping half of keepalive, can be adjusted
 
             if sleepTime > 0 {
                 do {
@@ -57,7 +56,7 @@ class PingPong: @unchecked Sendable {
                 }
             }
 
-            self.lastMessage = Date()
+            // self.lastMessage = Date()
         }
     }
 }

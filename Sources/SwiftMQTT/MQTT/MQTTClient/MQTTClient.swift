@@ -1,3 +1,11 @@
+// TODO:
+// - Implement disconnect x
+// - Implement publish
+//      - QoS 0 x
+//      - QoS 1
+//      - QoS 2
+// - Implement unsub
+
 import Foundation
 import Network
 import OSLog
@@ -42,35 +50,38 @@ class PacketIdAllocator {
     }
 }
 
-@MainActor
-final class MQTTClient {
+actor MQTTClient {
     // MQTT client vars
     private let clientId: String
     private let config: Config
     private let lwt: LWT?
     private let auth: Auth?
 
-    // private var topics: Dictionary<String, QoS> = .init()
+    private var isConnecting: Bool = false
+
     private var topics: Set<TopicFilter> = .init()
 
     private let tcpClient: TCPClient
     private var tcpState: NWConnection.State = .setup
     private var mqttState: MQTTState = .disconnected
 
-    private var mqttContinuation: CheckedContinuation<Void, Error>?
-    private var tcpContinuation: CheckedContinuation<Void, Error>?
-    private var subscribeContinuation: CheckedContinuation<Void, Error>?
-    private var lifetimeContinuation: CheckedContinuation<Void, Never>?
-
-    private var pingPong: PingPong
-
+    // keepalive
     private var pingTask: Task<Result<Void, MQTTError>, Never>?
+    private var keepAliveTask: Task<Void, Never>?
+    private var lastMessage = Date()
+
     private var connTask: Task<Result<Void, MQTTError>, Never>?
+
+    private var connGeneration: UInt = 0
 
     private var inFlight: Dictionary<UInt16, InFlightPacket> = .init()
     private var idAllocator: PacketIdAllocator = .init()
 
-    var onPublish: ((MQTTControlPacket) -> Void)?
+    private let internalPacketStream: AsyncThrowingStream<MQTTControlPacket, Error>
+    private let packetContinuation: AsyncThrowingStream<MQTTControlPacket, Error>.Continuation
+    nonisolated var packetStream: AsyncThrowingStream<MQTTControlPacket, Error> {
+        internalPacketStream
+    }
 
     enum MQTTState {
         case connected
@@ -85,13 +96,31 @@ final class MQTTClient {
         self.config = config
         self.lwt = lwt
         self.auth = auth
-        self.pingPong = .init(keepAlive: Double(config.keepAlive))
 
-        self.tcpClient.onReceive = handleReceive
-        self.tcpClient.onStateChange = handleTCPState
+        let (stream, continuation) = AsyncThrowingStream<MQTTControlPacket, Error>.makeStream()
+        self.internalPacketStream = stream
+        self.packetContinuation = continuation
 
-        self.pingPong.onPing = handlePing
-        self.pingPong.onPingTimeout = handlePingTimeout
+        // set loglevel
+        LoggingSystem.bootstrap { label in
+            var handler = StreamLogHandler.standardOutput(label: label)
+            handler.logLevel = config.logLevel
+            return handler
+        }
+
+        self.tcpClient.onReceive = { [weak self] data in
+            guard let self else { return }
+            Task {
+                await self.handleReceive(data)
+            }
+        }
+
+        self.tcpClient.onStateChange = { [weak self] state in
+            guard let self else { return }
+            Task {
+                await self.handleTCPState(state)
+            }
+        }
     }
 
     func start() async throws {
@@ -99,26 +128,32 @@ final class MQTTClient {
         try await connect()
 
         // subscribe to all defined topics
-        try await self.subscribe(to: Array(self.topics))
-
-        await withCheckedContinuation { cont in
-            self.lifetimeContinuation = cont
+        if !self.topics.isEmpty {
+            try await self.subscribe(to: Array(self.topics))
         }
+    }
+
+    func stop() {
+        self.disconnect()
+
+        self.packetContinuation.finish()
+
+        self.tcpClient.stop()
     }
 }
 
 extension MQTTClient {
     private func connect() async throws {
+        self.connGeneration += 1
+        let generation = self.connGeneration
         self.connTask?.cancel()
 
         // return if already connected
         if case .connected = self.mqttState { return }
-        if case .ready = self.tcpState { return }
 
         self.mqttState = .connecting
         // Wait for tcp client to be ready
-        self.tcpClient.start()
-        try await waitUntilTCPConnected()
+        try await self.tcpClient.start()
 
         var retries = 0
         var success = false
@@ -135,15 +170,36 @@ extension MQTTClient {
 
         if success {
             self.mqttState = .connected
-            self.pingPong.start()
+            self.startKeepAlive(generation: generation)
+            self.logInfo(message: "MQTT Client Connected")
         } else {
             throw MQTTError.Timeout(reason: "connect timed out")
         }
     }
 
+    private func disconnect() {
+        // cancel all tasks
+        self.keepAliveTask?.cancel()
+        self.keepAliveTask = nil
+        self.pingTask?.cancel()
+        self.pingTask = nil
+        self.connTask?.cancel()
+        self.connTask = nil
+
+        if case .connected = self.mqttState {
+            Task {
+                do {
+                    try await self.send(packet: MQTTDisconnectPacket())
+                } catch {
+                    self.logError(error: error)
+                }
+            }
+        }
+        self.mqttState = .disconnected
+    }
+
     private func sendConnect() async -> Result<Void, MQTTError> {
         do {
-            // let connectPacket = MQTTConnectPacket(clientId: self.clientId, lwt: self.lwt, auth: self.auth, keepAlive: self.config.keepAlive)
             let connectPacket = MQTTConnectPacket(clientId: self.clientId, keepAlive: self.config.keepAlive, lwt: self.lwt, auth: self.auth, cleanSession: self.config.cleanSession)
             try await self.send(packet: connectPacket)
         } catch {
@@ -179,8 +235,7 @@ extension MQTTClient {
                 inFlight[id] = .init(type: .SUBSCRIBE, cont: cont)
 
                 // timeout task
-                let task = Task { [weak self] in
-                    guard let self else { return }
+                let task = Task {
                     do {
                         // TODO: update to use dedicated suback timeout instead of connack
                         try await Task.sleep(nanoseconds: UInt64(self.config.connTimeout) * 1_000_000_000)
@@ -209,28 +264,33 @@ extension MQTTClient {
     }
 
     private func send(packet: MQTTControlPacket) async throws {
-        self.logSent(packet: packet)
 
         let bytes = packet.encode()
 
-        try await self.tcpClient.send(data: bytes)
+        do {
+            try await self.tcpClient.send(data: bytes)
+        } catch {
+            throw error
+        }
+        self.logSent(packet: packet)
+
+        // reset ping timer
+        self.resetKeepalive()
     }
 }
 
 // MARK: TCP client handlers
 extension MQTTClient {
     private func handleReceive(_ data: Data) {
-        let bytes = [UInt8](data)
+        let bytes = ByteBuffer(data)
         let parser = MQTTPacketParser()
         do {
             guard let packet = try parser.parsePacket(data: bytes) else {
                 return
             }
 
-            // reset pingpong timer
-            self.pingPong.reset()
+            self.logReceived(packet: packet)
 
-            logReceived(packet: packet)
 
             switch packet.fixedHeader.type {
                 case .CONNACK:
@@ -240,14 +300,12 @@ extension MQTTClient {
                     switch connackPacket.varHeader.connectReturnCode {
                         case .ConnectionAccepted:
                             self.mqttState = .connected
-                            self.mqttContinuation?.resume()
-                            self.mqttContinuation = nil
                             self.connTask?.cancel()
                         default:
                             // Could create handler or something for mqtt state updates
                             let err: Error = MQTTError.ConnectError(returnCode: connackPacket.varHeader.connectReturnCode)
                             self.mqttState = .error(err)
-                            logError(error: err)
+                            self.logError(error: err)
                     }
                 case .SUBACK:
                     // Change this to resume the continuation for the specific sub
@@ -270,7 +328,7 @@ extension MQTTClient {
                     inflightPacket.cont.resume()
 
                 case .PUBLISH:
-                    onPublish?(packet)
+                    self.packetContinuation.yield(packet)
                 case .PINGRESP:
                     self.pingTask?.cancel()
                     self.pingTask = nil
@@ -282,25 +340,27 @@ extension MQTTClient {
         }
     }
 
-    private func handleTCPState(_ state: NWConnection.State) {
+    private func handleTCPState(_ state: NWConnection.State) async {
         self.tcpState = state
         switch state {
             case .ready:
-                self.tcpContinuation?.resume()
-                self.tcpContinuation = nil
+                await tryConnect()
             case .failed(let error):
                 self.mqttState = .error(error)
+            case .cancelled:
+                self.mqttState = .disconnected
             default:
                 break
         }
     }
-}
 
-extension MQTTClient {
-    private func waitUntilTCPConnected() async throws {
-        if self.tcpState == .ready { return }
-        try await withCheckedThrowingContinuation { cont in
-            self.tcpContinuation = cont
+    private func tryConnect() async {
+        guard !isConnecting else { return }
+        self.isConnecting = true
+
+        Task {
+            defer { self.isConnecting = false }
+            try? await self.connect()
         }
     }
 }
@@ -308,11 +368,11 @@ extension MQTTClient {
 // MARK: Loggers
 extension MQTTClient {
     private func logReceived(packet: MQTTControlPacket) {
-        Log.mqtt.info("Received: \(packet.toString())")
+        Log.mqtt.debug("Received: \(packet.toString())")
     }
 
     private func logSent(packet: MQTTControlPacket) {
-        Log.mqtt.info("Sent: \(packet.toString())")
+        Log.mqtt.debug("Sent: \(packet.toString())")
     }
 
     private func logError(error: Error) {
@@ -322,11 +382,53 @@ extension MQTTClient {
     private func logWarning(message: String) {
         Log.mqtt.warning(Logger.Message(stringLiteral: message))
     }
+
+    private func logInfo(message: String) {
+        Log.mqtt.info(Logger.Message(stringLiteral: message))
+    }
 }
 
-// MARK: Keepalive handlers
+// MARK: Ping keepalive
 extension MQTTClient {
-    private func handlePing() async -> Result<Void, MQTTError> {
+    private func startKeepAlive(generation: UInt) {
+        self.keepAliveTask = Task {
+            while !Task.isCancelled {
+                guard generation == self.connGeneration else { return }
+
+                let elapsed = Date().timeIntervalSince(self.lastMessage)
+                let sleepTime = (Double(self.config.keepAlive) - elapsed) * 0.5 // only sleeping half of keepalive, can be adjusted
+
+                if sleepTime > 0 {
+                    do {
+                        try await Task.sleep(nanoseconds: UInt64(sleepTime * 1_000_000_000))
+                    } catch {
+                        break // task cancelled
+                    }
+                }
+
+                guard generation == self.connGeneration else { return }
+
+                if Date().timeIntervalSince(self.lastMessage) >= TimeInterval(self.config.keepAlive) {
+                    let pingResult = await self.ping()
+                    if case .failure(.Timeout) = pingResult {
+                        // TODO: figure out better way to handle error
+                        self.handlePingTimeout()
+                        break
+                    }
+                    if case .failure(.Disconnected) = pingResult {
+                        // handle disconnect for now just break the loop
+                        break
+                    }
+                }
+            }
+        }
+    }
+
+    private func resetKeepalive() {
+        self.lastMessage = Date()
+    }
+
+    private func ping() async -> Result<Void, MQTTError> {
         // Cancel pingtask if active
         self.pingTask?.cancel()
 
@@ -356,9 +458,8 @@ extension MQTTClient {
     private func handlePingTimeout() {
         self.logError(error: MQTTError.Timeout(reason: "ping timed out"))
 
-        // should enter connect retry loop here, for now just disconnecting
-        self.mqttState = .disconnected
-        self.lifetimeContinuation?.resume()
-        self.lifetimeContinuation = nil
+        // TODO: Add option to try reconnect if ping times out
+        // if config.retry
+        self.disconnect()
     }
 }

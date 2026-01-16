@@ -13,4 +13,37 @@ enum MQTTControlPacketType: UInt8 {
     case PINGREQ = 12
     case PINGRESP = 13
     case DISCONNECT = 14
+
+    func toString() -> String {
+        switch self {
+            case .CONNECT:
+                return "CONNECT"
+            case .CONNACK:
+                return "CONNACK"
+            case .PUBLISH:
+                return "PUBLISH"
+            case .PUBACK:
+                return "PUBACK"
+            case .PUBREC:
+                return "PUBREC"
+            case .PUBREL:
+                return "PUBREL"
+            case .PUBCOMP:
+                return "PUBCOMP"
+            case .SUBSCRIBE:
+                return "SUBSCRIBE"
+            case .SUBACK:
+                return "SUBACK"
+            case .UNSUBSCRIBE:
+                return "UNSUBSCRIBE"
+            case .UNSUBACK:
+                return "UNSUBACK"
+            case .PINGREQ:
+                return "PINGREQ"
+            case .PINGRESP:
+                return "PINGRESP"
+            case .DISCONNECT:
+                return "DISCONNECT"
+        }
+    }
 }

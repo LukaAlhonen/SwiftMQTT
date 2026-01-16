@@ -1,6 +1,7 @@
 import Foundation
 import Network
 
+// TODO: Should probably expand the erorr types
 enum TCPError: Error {
     case notConnected
 }
@@ -11,6 +12,17 @@ final class TCPClient: @unchecked Sendable {
     private let port: NWEndpoint.Port
 
     private var isStopped: Bool = false
+
+    // connect retry
+    private var retryConnTask: Task<Void, Never>?
+    private var retryConnInterval: UInt16 = 1
+
+    private var stateContinuation: AsyncStream<NWConnection.State>.Continuation?
+    private lazy var stateStream: AsyncStream<NWConnection.State> = {
+        AsyncStream { cont in
+            self.stateContinuation = cont
+        }
+    }()
 
     var onReceive: ((Data) -> Void)?
     var onStateChange: ((NWConnection.State) -> Void)?
@@ -32,11 +44,18 @@ final class TCPClient: @unchecked Sendable {
 
             if let error {
                 Log.tcp.error("Receive error: \(error)")
+                self?.connection?.cancel()
+                self?.connection = nil
+                self?.retryConnect()
                 return
             }
 
             if isComplete {
-                Log.tcp.info("Connection closed by peer")
+                Log.tcp.debug("Connection closed by peer")
+                self?.connection?.cancel()
+                self?.connection = nil
+                self?.retryConnect()
+                // self?.stop()
                 return
             }
 
@@ -44,7 +63,7 @@ final class TCPClient: @unchecked Sendable {
         }
     }
 
-    func send(data: [UInt8]) async throws{
+    func send(data: ByteBuffer) async throws{
         guard let connection else {
             throw TCPError.notConnected
         }
@@ -65,17 +84,31 @@ final class TCPClient: @unchecked Sendable {
     }
 
     private func makeConnection() {
+        guard self.connection == nil else { return }
+
         let conn = NWConnection(host: self.host, port: self.port, using: .tcp)
 
         conn.stateUpdateHandler = { [weak self] state in
-            self?.onStateChange?(state)
+            guard let self else { return }
+
+            self.onStateChange?(state)
+            self.stateContinuation?.yield(state)
 
             switch state {
                 case .ready:
-                    Log.tcp.info("tcp client connected")
-                    self?.receive(on: conn)
+                    Log.tcp.debug("tcp client connected")
+                    self.retryConnTask?.cancel()
+                    self.retryConnTask = nil
+                    self.receive(on: conn)
                 case .failed, .cancelled:
-                    self?.handleDisconnect()
+                    self.connection?.cancel()
+                    self.connection = nil
+                    self.retryConnect()
+                case .waiting(let error):
+                    Log.tcp.error("TCP error: \(error)")
+                    self.connection?.cancel()
+                    self.connection = nil
+                    self.retryConnect()
                 default:
                     break
             }
@@ -85,26 +118,54 @@ final class TCPClient: @unchecked Sendable {
         self.connection?.start(queue: .global())
     }
 
-    private func handleDisconnect() {
-        guard !isStopped else { return }
-        Log.tcp.error("Disconnected, retrying in 2s")
-        self.connection?.cancel()
-        self.connection = nil
+    private func retryConnect() {
+        guard self.retryConnTask == nil else { return }
 
-        Task {
-            try await Task.sleep(nanoseconds: 2_000_000_000)
-            self.makeConnection()
+        self.retryConnTask = Task {
+            defer { retryConnTask = nil }
+
+            while !Task.isCancelled && !self.isStopped {
+                makeConnection()
+
+                try? await Task.sleep(for: .seconds(self.retryConnInterval))
+
+                if connection != nil {
+                    return
+                }
+            }
         }
     }
 
-    func start() {
+    private func handleDisconnect() {
+        guard !isStopped else { return }
+        self.connection?.cancel()
+        self.connection = nil
+    }
+
+    func start() async throws {
         self.isStopped = false
+
+        _ = self.stateStream
+
         self.makeConnection()
+
+        for await state in self.stateStream {
+            switch state {
+                case .ready:
+                    return
+                default:
+                    continue
+            }
+        }
+
+        throw TCPError.notConnected
     }
 
     func stop() {
         self.isStopped = true
         self.connection?.cancel()
         self.connection = nil
+        self.stateContinuation?.finish()
+        self.stateContinuation = nil
     }
 }

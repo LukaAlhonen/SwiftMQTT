@@ -1,8 +1,8 @@
 struct MQTTUnsubscribePacket: MQTTControlPacket {
     var fixedHeader: FixedHeader
-    var varHeader: [UInt8]
-    var payload: [UInt8]
-    func encode() -> [UInt8] {
+    var varHeader: ByteBuffer
+    var payload: ByteBuffer
+    func encode() -> ByteBuffer {
         return [0x00]
     }
 

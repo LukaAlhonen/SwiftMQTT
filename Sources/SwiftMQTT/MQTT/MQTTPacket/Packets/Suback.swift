@@ -21,7 +21,7 @@ enum SubackReturnCode: UInt8 {
 struct SubackPayload {
     let returnCodes: [SubackReturnCode]
 
-    init(bytes: [UInt8]) throws {
+    init(bytes: ByteBuffer) throws {
         var codes: [SubackReturnCode] = []
         for byte in bytes {
             guard let code = SubackReturnCode(rawValue: byte) else {
@@ -32,8 +32,8 @@ struct SubackPayload {
         self.returnCodes = codes
     }
 
-    func encode() -> [UInt8] {
-        var bytes: [UInt8] = []
+    func encode() -> ByteBuffer {
+        var bytes: ByteBuffer = []
 
         for code in self.returnCodes {
             bytes.append(code.rawValue)
@@ -54,7 +54,7 @@ struct SubackVariableHeader {
         self.packetId = packetId
     }
 
-    func encode() -> [UInt8] {
+    func encode() -> ByteBuffer {
         return encodeUInt16(self.packetId)
     }
 }
@@ -64,7 +64,7 @@ struct MQTTSubackPacket: MQTTControlPacket {
     var varHeader: SubackVariableHeader
     var payload: SubackPayload
 
-    init(data: [UInt8]) throws {
+    init(data: ByteBuffer) throws {
         let packetType = data[0] >> 4
         if (packetType != MQTTControlPacketType.SUBACK.rawValue) {
             throw MQTTError.DecodePacketError(message: "Invalid packet type: \(packetType)")
@@ -75,12 +75,12 @@ struct MQTTSubackPacket: MQTTControlPacket {
 
         let packetId = (UInt16(data[2]) << 8) | UInt16(data[3])
         self.varHeader = SubackVariableHeader(packetId: packetId)
-        self.payload = try SubackPayload(bytes: [UInt8](data[4..<data.count]))
+        self.payload = try SubackPayload(bytes: ByteBuffer(data[4..<data.count]))
         self.fixedHeader = FixedHeader(type: .SUBACK, flags: 0, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
     }
 
-    func encode() -> [UInt8] {
-        var bytes: [UInt8] = []
+    func encode() -> ByteBuffer {
+        var bytes: ByteBuffer = []
         bytes.append(contentsOf: self.fixedHeader.encode())
         bytes.append(contentsOf: self.varHeader.encode())
         bytes.append(contentsOf: self.payload.encode())

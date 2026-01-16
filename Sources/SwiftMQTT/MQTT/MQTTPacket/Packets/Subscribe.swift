@@ -10,7 +10,7 @@ struct SubscribeVariableHeader {
         self.packetId = packetId
     }
 
-    func encode() -> [UInt8] {
+    func encode() -> ByteBuffer {
         return encodeUInt16(self.packetId)
     }
 
@@ -26,8 +26,8 @@ struct SubscribePayload {
         self.topics = topics
     }
 
-    func encode() -> [UInt8] {
-        var data: [UInt8] = []
+    func encode() -> ByteBuffer {
+        var data: ByteBuffer = []
 
         for topicFilter in self.topics {
             data.append(contentsOf: encodeUInt16(UInt16(topicFilter.topic.utf8.count)))
@@ -55,8 +55,8 @@ struct MQTTSubscribePacket: MQTTControlPacket {
         self.fixedHeader = FixedHeader(type: .SUBSCRIBE, flags: 0b0010, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
     }
 
-    func encode() -> [UInt8] {
-        var data: [UInt8] = []
+    func encode() -> ByteBuffer {
+        var data: ByteBuffer = []
         data.append(contentsOf: fixedHeader.encode())
         data.append(contentsOf: varHeader.encode())
         data.append(contentsOf: payload.encode())

@@ -1,5 +1,5 @@
-protocol MQTTControlPacket {
+protocol MQTTControlPacket: Sendable {
     var fixedHeader: FixedHeader { get set }
-    func encode() -> [UInt8]
+    func encode() -> ByteBuffer
     func toString() -> String
 }
