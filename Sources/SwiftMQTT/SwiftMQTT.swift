@@ -38,7 +38,5 @@ struct SwiftMQTT {
         } catch {
             Log.mqtt.error("Error: \(error)")
         }
-
-        await subscriber.stop()
     }
 }

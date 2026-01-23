@@ -1,10 +1,16 @@
 // TODO:
 // - Implement disconnect x
-// - Implement publish
-//      - QoS 0 x
-//      - QoS 1
-//      - QoS 2
+// - Implement publish x
+//      - receive: x
+//          - QoS 0 x
+//          - QoS 1 x
+//          - QoS 2 x
+//      - send:
+//          - QoS 0 x
+//          - QoS 1 x
+//          - QoS 2 x
 // - Implement unsub
+// - Implement auth
 
 import Foundation
 import Network
@@ -12,41 +18,100 @@ import OSLog
 import Dispatch
 import Logging
 
-struct InFlightPacket {
-    var type: MQTTControlPacketType
-    var cont: CheckedContinuation<Void, Error>
-    var timeout: Task<Void, Never>?
+enum PublishQoS1State {
+    case publishSent
+    case pubAckReceived
 }
 
-class PacketIdAllocator {
-    private var free: UInt16
-    private var allocated: Set<UInt16>
+enum PublishQoS2State {
+    case publishSent
+    case pubRecReceived
+    case pubRelSent
+    case pubCompReceived
+}
 
-    init() {
-        self.free = 1
-        self.allocated = []
+enum SubscribeState {
+    case SubscribeSent
+    case Done
+}
+
+enum InflightState {
+    case publishQoS1(PublishQoS1State)
+    case publishQoS2(PublishQoS2State)
+    case subscribe(SubscribeState)
+}
+
+struct InflightTask {
+    var state: InflightState
+    var timeout: TimeoutTask?
+}
+
+final class TimeoutTask: @unchecked Sendable {
+    private var task: Task<Void, Never>?
+    private var cont: CheckedContinuation<Void, Error>?
+    private var timeout: Duration
+    private var completedResult: Result<Void, Error>?
+
+    init(timeout: UInt16) {
+        self.timeout = .seconds(Double(timeout))
     }
 
-    private func increment() {
-        self.free &+= 1
-        if (self.free == 0) { self.free = 1 }
-    }
-
-    func next() -> UInt16 {
-        while self.allocated.contains(self.free) {
-            self.increment()
+    func start() {
+        guard task == nil else {
+            return
         }
 
-        let id = self.free
-        self.allocated.insert(id)
-
-        self.increment()
-
-        return id
+        self.task = Task {
+            do {
+                try await Task.sleep(for: self.timeout)
+                self.finish(result: .failure(MQTTError.Timeout(reason: "Task timed out")))
+            } catch {
+                // timer cancelled
+            }
+        }
     }
 
-    func release(id: UInt16) {
-        self.allocated.remove(id)
+    private func finish(result: Result<Void, Error>) {
+        if let cont = self.cont {
+            self.cont = nil
+            self.task?.cancel()
+            self.task = nil
+
+
+            switch result {
+                case .success:
+                    cont.resume()
+                case .failure(let error):
+                    cont.resume(throwing: error)
+            }
+        } else {
+            self.completedResult = result
+            self.task?.cancel()
+            self.task = nil
+        }
+    }
+
+    func stop() {
+        self.finish(result: .success(()))
+    }
+
+    func wait() async throws {
+        try await withCheckedThrowingContinuation { cont in
+            if let result = self.completedResult {
+                self.resume(cont: cont, result: result)
+            } else {
+                self.cont = cont
+            }
+        }
+    }
+
+    private func resume(cont: CheckedContinuation<Void, Error>, result: Result<Void, Error>) {
+        switch result {
+            case .success:
+                cont.resume()
+            case .failure(let error):
+                cont.resume(throwing: error)
+        }
     }
 }
 
@@ -59,22 +124,25 @@ actor MQTTClient {
 
     private var isConnecting: Bool = false
 
-    private var topics: Set<TopicFilter> = .init()
+    private var topics: Dictionary<String, TopicFilter> = .init()
 
     private let tcpClient: TCPClient
     private var tcpState: NWConnection.State = .setup
     private var mqttState: MQTTState = .disconnected
 
     // keepalive
-    private var pingTask: Task<Result<Void, MQTTError>, Never>?
+    private var pingTask: TimeoutTask?
     private var keepAliveTask: Task<Void, Never>?
     private var lastMessage = Date()
 
-    private var connTask: Task<Result<Void, MQTTError>, Never>?
+    private var connectTask: TimeoutTask?
 
     private var connGeneration: UInt = 0
 
-    private var inFlight: Dictionary<UInt16, InFlightPacket> = .init()
+    // TODO: rename
+    // private var activeTasks: Dictionary<UInt16, TimeoutTask> = .init()
+    private var activeTasks: Dictionary<UInt16, InflightTask> = .init()
+    private var passiveTasks: Set<UInt16> = .init()
     private var idAllocator: PacketIdAllocator = .init()
 
     private let internalPacketStream: AsyncThrowingStream<MQTTControlPacket, Error>
@@ -125,12 +193,8 @@ actor MQTTClient {
 
     func start() async throws {
         if case .connected = self.mqttState { return }
-        try await connect()
 
-        // subscribe to all defined topics
-        if !self.topics.isEmpty {
-            try await self.subscribe(to: Array(self.topics))
-        }
+        try await self.tcpClient.start()
     }
 
     func stop() {
@@ -146,24 +210,25 @@ extension MQTTClient {
     private func connect() async throws {
         self.connGeneration += 1
         let generation = self.connGeneration
-        self.connTask?.cancel()
 
         // return if already connected
         if case .connected = self.mqttState { return }
+        self.connectTask?.stop()
 
         self.mqttState = .connecting
         // Wait for tcp client to be ready
-        try await self.tcpClient.start()
 
         var retries = 0
         var success = false
 
         while retries <= self.config.maxRetries {
-            let result = await self.sendConnect()
-            if case .success = result {
+
+            do {
+                try await self.sendConnect()
                 success = true
                 break
-            } else {
+            } catch {
+                self.logError(error: error)
                 retries += 1
             }
         }
@@ -181,10 +246,10 @@ extension MQTTClient {
         // cancel all tasks
         self.keepAliveTask?.cancel()
         self.keepAliveTask = nil
-        self.pingTask?.cancel()
+        self.pingTask?.stop()
         self.pingTask = nil
-        self.connTask?.cancel()
-        self.connTask = nil
+        self.connectTask?.stop()
+        self.connectTask = nil
 
         if case .connected = self.mqttState {
             Task {
@@ -198,28 +263,15 @@ extension MQTTClient {
         self.mqttState = .disconnected
     }
 
-    private func sendConnect() async -> Result<Void, MQTTError> {
-        do {
-            let connectPacket = MQTTConnectPacket(clientId: self.clientId, keepAlive: self.config.keepAlive, lwt: self.lwt, auth: self.auth, cleanSession: self.config.cleanSession)
-            try await self.send(packet: connectPacket)
-        } catch {
-            return .failure(.Disconnected)
-        }
+    private func sendConnect() async throws {
+        let connectPacket = MQTTConnectPacket(clientId: self.clientId, keepAlive: self.config.keepAlive, lwt: self.lwt, auth: self.auth, cleanSession: self.config.cleanSession)
+        try await self.send(packet: connectPacket)
 
-        let task = Task { () -> Result<Void, MQTTError> in
-            do {
-                try await Task.sleep(nanoseconds: UInt64(self.config.connTimeout) * 1_000_000_000)
-                return .failure(.Timeout(reason: "connect timed out"))
-            } catch {
-                return .success(())
-            }
-        }
+        let task = TimeoutTask(timeout: self.config.connTimeout)
+        task.start()
+        self.connectTask = task
 
-        self.connTask = task
-        let result = await task.value
-
-        self.connTask = nil
-        return result
+        try await self.connectTask?.wait()
     }
 
     func subscribe(to topics: [TopicFilter]) async throws {
@@ -231,34 +283,16 @@ extension MQTTClient {
             // send sub packet
             try await self.send(packet: subscribePacket)
 
-            try await withCheckedThrowingContinuation { cont in
-                inFlight[id] = .init(type: .SUBSCRIBE, cont: cont)
+            // TODO: update to use dedicated suback timeout instead of connack
+            let timeout = TimeoutTask(timeout: self.config.connTimeout)
+            timeout.start()
+            self.activeTasks[id] = InflightTask(state: .subscribe(.SubscribeSent), timeout: timeout)
+            try await timeout.wait()
 
-                // timeout task
-                let task = Task {
-                    do {
-                        // TODO: update to use dedicated suback timeout instead of connack
-                        try await Task.sleep(nanoseconds: UInt64(self.config.connTimeout) * 1_000_000_000)
-
-                        // timer ran out, release id and throw error
-                        if let timedOut = self.inFlight.removeValue(forKey: id) {
-                            self.idAllocator.release(id: id)
-                            timedOut.cont.resume(throwing: MQTTError.Timeout(reason: "subscribe timed out"))
-                        }
-                    } catch {
-                        // timeout cancelled
-                    }
-                }
-
-                if var packet = self.inFlight[id] {
-                    packet.timeout = task
-                    self.inFlight[id] = packet
-                }
-            }
         } else {
             // place in topics array
             for topic in topics {
-                self.topics.insert(topic)
+                self.topics[topic.topic] = topic
             }
         }
     }
@@ -276,6 +310,45 @@ extension MQTTClient {
 
         // reset ping timer
         self.resetKeepalive()
+    }
+}
+
+// MARK: Publish related methods
+extension MQTTClient {
+    func publish(data: ByteBuffer, qos: QoS, topic: String) async throws {
+        let packetId = self.idAllocator.next()
+        let publishPacket = MQTTPublishPacket(topicName: topic, message: data, packetId: packetId, qos: qos)
+
+        // fire and forget
+        if qos == .AtMostOnce {
+            try await self.send(packet: publishPacket)
+        }
+
+        // wait for puback
+        if qos == .AtLeastOnce {
+            // should create separate timeout for publish
+            let timeout = TimeoutTask(timeout: self.config.connTimeout)
+            timeout.start()
+            self.activeTasks[packetId] = InflightTask(state: .publishQoS1(.publishSent), timeout: timeout)
+            try await self.send(packet: publishPacket)
+            try await timeout.wait()
+        }
+
+        if qos == .ExactlyOnce {
+            // Send publish and wait for pubrec
+            let pubTimeout = TimeoutTask(timeout: self.config.connTimeout)
+            pubTimeout.start()
+            self.activeTasks[packetId] = InflightTask(state: .publishQoS2(.publishSent), timeout: pubTimeout)
+            try await self.send(packet: publishPacket)
+            try await pubTimeout.wait()
+
+            // Send pubrel and wait for pubcomp
+            let pubrelTimeout = TimeoutTask(timeout: self.config.connTimeout)
+            pubrelTimeout.start()
+            self.activeTasks[packetId] = InflightTask(state: .publishQoS2(.pubRelSent))
+            try await self.send(packet: MQTTPubrelPacket(packetId: packetId))
+            try await pubrelTimeout.wait()
+        }
     }
 }
 
@@ -300,7 +373,7 @@ extension MQTTClient {
                     switch connackPacket.varHeader.connectReturnCode {
                         case .ConnectionAccepted:
                             self.mqttState = .connected
-                            self.connTask?.cancel()
+                            self.connectTask?.stop()
                         default:
                             // Could create handler or something for mqtt state updates
                             let err: Error = MQTTError.ConnectError(returnCode: connackPacket.varHeader.connectReturnCode)
@@ -313,24 +386,125 @@ extension MQTTClient {
                         fatalError("Parser returned wrong packet type: expected Suback, received \(packet.toString())")
                     }
                     let packetId = subackPacket.varHeader.packetId
-                    guard let inflightPacket = self.inFlight.removeValue(forKey: packetId) else {
+                    guard let timeoutTask = self.activeTasks.removeValue(forKey: packetId) else {
                         self.logWarning(message: "Received SUBACK for unknown packetId: \(packetId)")
                         break
                     }
 
-                    // cancel timeout
-                    inflightPacket.timeout?.cancel()
-
                     // release id
                     self.idAllocator.release(id: packetId)
-
-                    // resume cont for inflight packet
-                    inflightPacket.cont.resume()
+                    timeoutTask.timeout?.stop()
 
                 case .PUBLISH:
+                    // Inspect qos of packet and act accrodingly
+                    guard let publishPacket = packet as? MQTTPublishPacket else {
+                        fatalError("Parser returned wrong packet type: expected PUBLISH, received \(packet.fixedHeader.type.toString())")
+                    }
+
+                    let topic = publishPacket.varHeader.topicName
+                    guard let _ = self.topics[topic] else {
+                        self.logWarning(message: "Recieved PUBLISH for unknown topic")
+                        return
+                    }
+
+                    let qos = publishPacket.qos
+
+                    // qos 1 => send puback
+                    if qos == .AtLeastOnce {
+                        guard let packetId = publishPacket.varHeader.packetId else {
+                            self.logWarning(message: "Received QoS 1 PUBLISH packet without packet ID")
+                            return
+                        }
+                        Task {
+                            do {
+                                try await self.send(packet: MQTTPubackPacket(packetId: packetId))
+                            } catch {
+                                self.logError(error: error)
+                            }
+                        }
+                    }
+
+                    if qos == .ExactlyOnce {
+                        guard let packetId = publishPacket.varHeader.packetId else {
+                            self.logWarning(message: "Received QoS 2 PUBLISH packet without packet ID")
+                            return
+                        }
+                        if publishPacket.dup {
+                            self.logWarning(message: "Received QoS 2 PUBLISH packet with dup flag set")
+                        }
+
+                        // store packetId, send pubrec and init onward delivery of message
+                        self.passiveTasks.insert(packetId)
+
+                        Task {
+                            do {
+                                try await self.send(packet: MQTTPubrecPacket(packetId: packetId))
+                            } catch {
+                                self.logError(error: error)
+                            }
+                        }
+                    }
+
                     self.packetContinuation.yield(packet)
+                case .PUBREL:
+                    guard let pubrelPacket = packet as? MQTTPubrelPacket else {
+                        fatalError("Parser returned wrong packet type: expected PUBREL, received \(packet.fixedHeader.type.toString())")
+                    }
+
+                    let packetId = pubrelPacket.varHeader.packetId
+
+                    if !self.passiveTasks.contains(packetId) {
+                        self.logWarning(message: "Received PUBREL with unknown packetID: \(packetId)")
+                        return
+                    }
+
+                    self.passiveTasks.remove(packetId)
+
+                    Task {
+                        do {
+                            try await self.send(packet: MQTTPubcompPacket(packetId: packetId))
+                        } catch {
+                            self.logError(error: error)
+                        }
+                    }
+                case .PUBACK:
+                    guard let pubackPacket = packet as? MQTTPubackPacket else {
+                        fatalError("Parser returned wrong packet type: expected PUBACK, received \(packet.fixedHeader.type.toString())")
+                    }
+
+                    let packetId = pubackPacket.varHeader.packetId
+
+                    guard var task = self.activeTasks.removeValue(forKey: packetId) else {
+                        self.logWarning(message: "Recieved PUBACK with unknown packetId")
+                        return
+                    }
+                    task.timeout?.stop()
+                    task.state = .publishQoS1(.pubAckReceived)
+                    self.idAllocator.release(id: packetId)
+                case .PUBREC:
+                    guard let pubrecPacket = packet as? MQTTPubrecPacket else {
+                        fatalError("Parser returned wrong packet type: expected PUBREC, received \(packet.fixedHeader.type.toString())")
+                    }
+                    let packetId = pubrecPacket.varHeader.packetId
+                    guard let task = self.activeTasks.removeValue(forKey: packetId) else {
+                        self.logWarning(message: "Received PUBREC with unknown packetId")
+                        return
+                    }
+                    task.timeout?.stop()
+                    self.activeTasks[packetId] = InflightTask(state: .publishQoS2(.pubRecReceived))
+                case .PUBCOMP:
+                    guard let pubcompPacket = packet as? MQTTPubcompPacket else {
+                        fatalError("Parser returned wrong packet type: expected PUBCOMP, received \(packet.fixedHeader.type.toString())")
+                    }
+                    let packetId = pubcompPacket.varHeader.packetId
+                    guard let task = self.activeTasks.removeValue(forKey: packetId) else {
+                        self.logWarning(message: "Received PUBCOMP with unknown packetId")
+                        return
+                    }
+                    task.timeout?.stop()
+                    self.activeTasks[packetId] = InflightTask(state: .publishQoS2(.pubCompReceived))
                 case .PINGRESP:
-                    self.pingTask?.cancel()
+                    self.pingTask?.stop()
                     self.pingTask = nil
                 default:
                     return
@@ -361,6 +535,17 @@ extension MQTTClient {
         Task {
             defer { self.isConnecting = false }
             try? await self.connect()
+            await self.subscribeToTopics()
+        }
+    }
+
+    private func subscribeToTopics() async {
+        if self.topics.isEmpty { return }
+
+        do {
+            try await self.subscribe(to: Array(self.topics.values))
+        } catch {
+            self.logError(error: error)
         }
     }
 }
@@ -409,14 +594,12 @@ extension MQTTClient {
                 guard generation == self.connGeneration else { return }
 
                 if Date().timeIntervalSince(self.lastMessage) >= TimeInterval(self.config.keepAlive) {
-                    let pingResult = await self.ping()
-                    if case .failure(.Timeout) = pingResult {
-                        // TODO: figure out better way to handle error
+                    do {
+                        try await self.ping()
+                    } catch MQTTError.Timeout {
                         self.handlePingTimeout()
                         break
-                    }
-                    if case .failure(.Disconnected) = pingResult {
-                        // handle disconnect for now just break the loop
+                    } catch {
                         break
                     }
                 }
@@ -428,31 +611,17 @@ extension MQTTClient {
         self.lastMessage = Date()
     }
 
-    private func ping() async -> Result<Void, MQTTError> {
+    private func ping() async throws {
         // Cancel pingtask if active
-        self.pingTask?.cancel()
+        self.pingTask?.stop()
 
-         do {
-            try await self.send(packet: MQTTPingreqPacket())
-         } catch {
-             self.mqttState = .error(error)
-             return .failure(.Disconnected)
-         }
+        try await self.send(packet: MQTTPingreqPacket())
 
-         let task = Task { () -> Result<Void, MQTTError> in
-            do {
-                try await Task.sleep(nanoseconds: UInt64(self.config.pingTimeout) * 1_000_000_000)
-                return .failure(.Timeout(reason: "ping timed out"))
-            } catch {
-                return .success(())
-            }
-         }
+         let task = TimeoutTask(timeout: self.config.pingTimeout)
+
 
          self.pingTask = task
-         let result = await task.value
-
-         self.pingTask = nil
-         return result
+         try await self.pingTask?.wait()
     }
 
     private func handlePingTimeout() {

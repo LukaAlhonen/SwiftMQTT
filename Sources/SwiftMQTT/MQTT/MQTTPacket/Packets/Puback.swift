@@ -23,6 +23,29 @@ struct MQTTPubackPacket: MQTTControlPacket {
         self.varHeader = .init(packetId: packetId)
     }
 
+    init(bytes: ByteBuffer) throws {
+        guard let type = MQTTControlPacketType(rawValue: bytes[0] >> 4) else {
+            throw MQTTError.DecodePacketError(message: "Invalid mqtt packet type")
+        }
+
+        if type != .PUBACK {
+            throw MQTTError.DecodePacketError(message: "Incorrect packet type, expected PUBACK, received: \(type.toString())")
+        }
+
+        let flags = bytes[0] & 0b00001111
+        if flags != 0 {
+            throw MQTTError.DecodePacketError(message: "Invalid flags")
+        }
+
+        let msgLen = bytes[1]
+        let packetIdMSB = bytes[2]
+        let packetIdLSB = bytes[3]
+        let packetId = (UInt16(packetIdMSB) << 8) | UInt16(packetIdLSB)
+
+        self.fixedHeader = .init(type: type, flags: flags, remainingLength: UInt(msgLen))
+        self.varHeader = .init(packetId: packetId)
+    }
+
     func encode() -> ByteBuffer {
         var bytes: ByteBuffer = []
         bytes.append(contentsOf: self.fixedHeader.encode())

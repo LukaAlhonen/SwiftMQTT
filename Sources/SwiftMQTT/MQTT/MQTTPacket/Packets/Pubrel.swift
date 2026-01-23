@@ -18,6 +18,11 @@ struct MQTTPubrelPacket: MQTTControlPacket {
     var fixedHeader: FixedHeader
     var varHeader: PubrelVariableHeader
 
+    init(packetId: UInt16) {
+        self.fixedHeader = .init(type: .PUBREL, flags: 2, remainingLength: 2)
+        self.varHeader = .init(packetId: packetId)
+    }
+
     init(bytes: ByteBuffer) throws {
         guard let type = MQTTControlPacketType(rawValue: bytes[0] >> 4) else {
             throw MQTTError.DecodePacketError(message: "Invalid packet type: \(bytes[0] >> 4)")
