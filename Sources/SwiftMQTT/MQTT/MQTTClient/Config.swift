@@ -1,5 +1,4 @@
 import Foundation
-import Logging
 
 struct Config {
     let keepAlive: UInt16
@@ -7,15 +6,13 @@ struct Config {
     let connTimeout: UInt16
     let maxRetries: UInt16 // max connect retries
     let cleanSession: Bool
-    let logLevel: Logger.Level
 
-    init(keepAlive: UInt16 = 60, pingTimeout: UInt16 = 5, connTimeout: UInt16 = 30, maxRetries: UInt16 = 0, cleanSession: Bool = true, logLevel: Logger.Level = .info) {
+    init(keepAlive: UInt16 = 60, pingTimeout: UInt16 = 5, connTimeout: UInt16 = 30, maxRetries: UInt16 = 0, cleanSession: Bool = true) {
         self.keepAlive = keepAlive
         self.pingTimeout = pingTimeout
         self.connTimeout = connTimeout
         self.maxRetries = maxRetries
         self.cleanSession = cleanSession
-        self.logLevel = logLevel
     }
 }
 

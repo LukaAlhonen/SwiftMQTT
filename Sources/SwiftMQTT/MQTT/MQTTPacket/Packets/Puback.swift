@@ -1,4 +1,4 @@
-struct PubackVarableHeaer {
+struct PubackVarableHeader: Equatable {
     let packetId: UInt16
 
     init(packetId: UInt16) {
@@ -16,7 +16,7 @@ struct PubackVarableHeaer {
 
 struct MQTTPubackPacket: MQTTControlPacket {
     var fixedHeader: FixedHeader
-    var varHeader: PubackVarableHeaer
+    var varHeader: PubackVarableHeader
 
     init(packetId: UInt16) {
         self.fixedHeader = .init(type: .PUBACK, flags: 0, remainingLength: 2)

@@ -1,6 +1,6 @@
 import Foundation
 
-struct ConnConnectFlags {
+struct ConnConnectFlags: Equatable {
     let username: Bool
     let password: Bool
     let willRetain: Bool
@@ -61,7 +61,7 @@ struct ConnConnectFlags {
     }
 }
 
-struct ConnVariableHeader {
+struct ConnVariableHeader: Equatable {
     var protocolName: String
     var protocolLevel: UInt8
     var connectFlags: ConnConnectFlags
@@ -87,7 +87,7 @@ struct ConnVariableHeader {
     }
 }
 
-struct ConnPayload {
+struct ConnPayload: Equatable {
     var clientId: String
     var willTopic: String?
     var willMessage: Data?

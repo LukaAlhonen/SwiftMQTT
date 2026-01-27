@@ -3,7 +3,7 @@ struct TopicFilter: Hashable {
     let qos: QoS
 }
 
-struct SubscribeVariableHeader {
+struct SubscribeVariableHeader: Equatable {
     var packetId: UInt16
 
     init(packetId: UInt16) {
@@ -19,7 +19,7 @@ struct SubscribeVariableHeader {
     }
 }
 
-struct SubscribePayload {
+struct SubscribePayload: Equatable {
     var topics: [TopicFilter]
 
     init(topics: [TopicFilter]) {

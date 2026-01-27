@@ -1,5 +1,5 @@
 class MQTTPacketParser {
-    func parsePacket(data: ByteBuffer) throws -> MQTTControlPacket? {
+    func parsePacket(data: ByteBuffer) throws -> (any MQTTControlPacket)? {
         // Connack
         if (data.starts(with: [0x20])) {
             let connack = try MQTTConnackPacket(data: data)

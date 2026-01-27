@@ -1,6 +1,6 @@
 import Foundation
 
-struct PublishVarHeader {
+struct PublishVarHeader: Equatable {
     let topicName: String
     let packetId: UInt16?
 
@@ -40,7 +40,7 @@ struct PublishVarHeader {
     }
 }
 
-struct PublishPayload {
+struct PublishPayload: Equatable {
     let content: ByteBuffer
 
     init(content: ByteBuffer) {
@@ -61,7 +61,7 @@ struct PublishPayload {
     }
 }
 
-struct MQTTPublishPacket: MQTTControlPacket {
+struct MQTTPublishPacket: MQTTControlPacket, Equatable {
     var fixedHeader: FixedHeader
     var varHeader: PublishVarHeader
     var payload: PublishPayload

@@ -1,4 +1,4 @@
-struct PubcompVariableHeader {
+struct PubcompVariableHeader: Equatable {
     let packetId: UInt16
 
     init(packetId: UInt16) {

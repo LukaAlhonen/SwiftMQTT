@@ -145,9 +145,9 @@ actor MQTTClient {
     private var passiveTasks: Set<UInt16> = .init()
     private var idAllocator: PacketIdAllocator = .init()
 
-    private let internalPacketStream: AsyncThrowingStream<MQTTControlPacket, Error>
-    private let packetContinuation: AsyncThrowingStream<MQTTControlPacket, Error>.Continuation
-    nonisolated var packetStream: AsyncThrowingStream<MQTTControlPacket, Error> {
+    private let internalPacketStream: AsyncThrowingStream<any MQTTControlPacket, Error>
+    private let packetContinuation: AsyncThrowingStream<any MQTTControlPacket, Error>.Continuation
+    nonisolated var packetStream: AsyncThrowingStream<any MQTTControlPacket, Error> {
         internalPacketStream
     }
 
@@ -165,16 +165,13 @@ actor MQTTClient {
         self.lwt = lwt
         self.auth = auth
 
-        let (stream, continuation) = AsyncThrowingStream<MQTTControlPacket, Error>.makeStream()
-        self.internalPacketStream = stream
-        self.packetContinuation = continuation
-
-        // set loglevel
-        LoggingSystem.bootstrap { label in
-            var handler = StreamLogHandler.standardOutput(label: label)
-            handler.logLevel = config.logLevel
-            return handler
-        }
+        // let (stream, continuation) = AsyncThrowingStream<any MQTTControlPacket, Error>.makeStream()
+        // self.internalPacketStream = stream
+        // self.packetContinuation = continuation
+        var cont: AsyncThrowingStream<any MQTTControlPacket, Error>.Continuation!
+        self.internalPacketStream = AsyncThrowingStream(bufferingPolicy: .bufferingNewest(10)) { continuation in
+            cont = continuation}
+        self.packetContinuation = cont
 
         self.tcpClient.onReceive = { [weak self] data in
             guard let self else { return }
@@ -297,7 +294,7 @@ extension MQTTClient {
         }
     }
 
-    private func send(packet: MQTTControlPacket) async throws {
+    private func send(packet: any MQTTControlPacket) async throws {
 
         let bytes = packet.encode()
 
@@ -314,14 +311,32 @@ extension MQTTClient {
 }
 
 // MARK: Publish related methods
+// TODO: remove packetID allocation on qos 1
 extension MQTTClient {
     func publish(data: ByteBuffer, qos: QoS, topic: String) async throws {
         let packetId = self.idAllocator.next()
         let publishPacket = MQTTPublishPacket(topicName: topic, message: data, packetId: packetId, qos: qos)
 
-        // fire and forget
+        try await self.sendPublish(packet: publishPacket)
+    }
+
+    func publish(message: String, qos: QoS, topic: String) async throws {
+        let packetId = self.idAllocator.next()
+        let publishPacket = MQTTPublishPacket(topicName: topic, message: ByteBuffer(message.utf8), packetId: packetId, qos: qos)
+
+        try await self.sendPublish(packet: publishPacket)
+    }
+
+    func publish(packet: MQTTPublishPacket) async throws {
+        try await self.sendPublish(packet: packet)
+    }
+
+    private func sendPublish(packet: MQTTPublishPacket) async throws {
+        let packetId = packet.varHeader.packetId ?? self.idAllocator.next()
+        let qos = packet.qos
+
         if qos == .AtMostOnce {
-            try await self.send(packet: publishPacket)
+            try await self.send(packet: packet)
         }
 
         // wait for puback
@@ -330,7 +345,7 @@ extension MQTTClient {
             let timeout = TimeoutTask(timeout: self.config.connTimeout)
             timeout.start()
             self.activeTasks[packetId] = InflightTask(state: .publishQoS1(.publishSent), timeout: timeout)
-            try await self.send(packet: publishPacket)
+            try await self.send(packet: packet)
             try await timeout.wait()
         }
 
@@ -339,7 +354,7 @@ extension MQTTClient {
             let pubTimeout = TimeoutTask(timeout: self.config.connTimeout)
             pubTimeout.start()
             self.activeTasks[packetId] = InflightTask(state: .publishQoS2(.publishSent), timeout: pubTimeout)
-            try await self.send(packet: publishPacket)
+            try await self.send(packet: packet)
             try await pubTimeout.wait()
 
             // Send pubrel and wait for pubcomp
@@ -552,11 +567,11 @@ extension MQTTClient {
 
 // MARK: Loggers
 extension MQTTClient {
-    private func logReceived(packet: MQTTControlPacket) {
+    private func logReceived(packet: any MQTTControlPacket) {
         Log.mqtt.debug("Received: \(packet.toString())")
     }
 
-    private func logSent(packet: MQTTControlPacket) {
+    private func logSent(packet: any MQTTControlPacket) {
         Log.mqtt.debug("Sent: \(packet.toString())")
     }
 

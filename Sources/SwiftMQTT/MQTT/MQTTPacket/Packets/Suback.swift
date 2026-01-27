@@ -18,7 +18,7 @@ enum SubackReturnCode: UInt8 {
     }
 }
 
-struct SubackPayload {
+struct SubackPayload: Equatable {
     let returnCodes: [SubackReturnCode]
 
     init(bytes: ByteBuffer) throws {
@@ -47,7 +47,7 @@ struct SubackPayload {
     }
 }
 
-struct SubackVariableHeader {
+struct SubackVariableHeader: Equatable {
     let packetId: UInt16
 
     init(packetId: UInt16) {
