@@ -1,7 +1,7 @@
-struct MQTTPingrespPacket: MQTTControlPacket {
+struct Pingresp: MQTTControlPacket {
     var fixedHeader: FixedHeader
 
-    init(bytes: ByteBuffer) throws {
+    init(bytes: Bytes) throws {
         guard let type = MQTTControlPacketType(rawValue: bytes[0] >> 4) else {
             throw MQTTError.DecodePacketError(message: "Invalid packet type: \(bytes[0] >> 4)")
         }
@@ -9,7 +9,7 @@ struct MQTTPingrespPacket: MQTTControlPacket {
         self.fixedHeader = FixedHeader(type: type, flags: 0, remainingLength: 0)
     }
 
-    func encode() -> ByteBuffer {
+    func encode() -> Bytes {
         return self.fixedHeader.encode()
     }
 

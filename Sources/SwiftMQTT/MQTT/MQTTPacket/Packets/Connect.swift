@@ -74,8 +74,8 @@ struct ConnVariableHeader: Equatable {
         self.keepAlive = keepAlive
     }
 
-    func encode() -> ByteBuffer {
-        var data: ByteBuffer = []
+    func encode() -> Bytes {
+        var data: Bytes = []
 
         data.append(contentsOf: encodeUInt16(UInt16(self.protocolName.count)))
         data.append(contentsOf: self.protocolName.utf8)
@@ -106,8 +106,8 @@ struct ConnPayload: Equatable {
         }
     }
 
-    func encode() -> ByteBuffer {
-        var data: ByteBuffer = []
+    func encode() -> Bytes {
+        var data: Bytes = []
 
         data.append(contentsOf: encodeUInt16(UInt16(self.clientId.count)))
         data.append(contentsOf: self.clientId.utf8)
@@ -136,7 +136,7 @@ struct ConnPayload: Equatable {
     }
 }
 
-struct MQTTConnectPacket: MQTTControlPacket {
+struct Connect: MQTTControlPacket {
     var fixedHeader: FixedHeader
     var varHeader: ConnVariableHeader
     var payload: ConnPayload
@@ -166,8 +166,8 @@ struct MQTTConnectPacket: MQTTControlPacket {
             remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
     }
 
-    func encode() -> ByteBuffer {
-        var data: ByteBuffer = []
+    func encode() -> Bytes {
+        var data: Bytes = []
         data.append(contentsOf: self.fixedHeader.encode())
         data.append(contentsOf: self.varHeader.encode())
         data.append(contentsOf: self.payload.encode())

@@ -26,7 +26,7 @@ import Testing
         throw TestError.emptyPacketStream
     }
 
-    let pubPacket = MQTTPublishPacket(topicName: "test/topic", message: "hello", qos: .AtMostOnce)
+    let pubPacket = Publish(topicName: "test/topic", message: "hello", qos: .AtMostOnce)
 
     try! await publisher.publish(packet: pubPacket)
 
@@ -34,5 +34,5 @@ import Testing
         try await packetTask.value
     }
 
-    #expect(packet as? MQTTPublishPacket == pubPacket)
+    #expect(packet as? Publish == pubPacket)
 }

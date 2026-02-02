@@ -1,5 +1,5 @@
 protocol MQTTControlPacket: Sendable, Equatable {
     var fixedHeader: FixedHeader { get set }
-    func encode() -> ByteBuffer
+    func encode() -> Bytes
     func toString() -> String
 }

@@ -1,5 +1,5 @@
-import Foundation
 import Dispatch
+import Foundation
 import Logging
 
 @main
@@ -14,10 +14,10 @@ struct SwiftMQTT {
         }
 
         let host = "127.0.0.1"
-        let port: UInt16 = 1883
+        let port: Int = 1883
         let subscriber = MQTTClient(
-            brokerAddress: host,
-            brokerPort: port,
+            host: host,
+            port: port,
             clientId: "sub-1",
             config: .init(keepAlive: 5)
         )
@@ -29,12 +29,11 @@ struct SwiftMQTT {
         }
 
         do {
-            try await subscriber.subscribe(to:
-                [
-                    .init(topic: "test/topic0", qos: .AtMostOnce),
-                    .init(topic: "test/topic1", qos: .AtLeastOnce),
-                    .init(topic: "test/topic2", qos: .ExactlyOnce)
-                ]
+            try await subscriber.subscribe(to: [
+                .init(topic: "test/topic0", qos: .AtMostOnce),
+                .init(topic: "test/topic1", qos: .AtLeastOnce),
+                .init(topic: "test/topic2", qos: .ExactlyOnce),
+            ]
             )
         } catch {
             Log.mqtt.error("Error subscribing: \(error)")
@@ -42,7 +41,17 @@ struct SwiftMQTT {
 
         do {
             for try await packet in subscriber.packetStream {
-                Log.mqtt.info("Got sum: \(packet.toString())")
+                switch packet {
+                    case .publish(let publish):
+                        // Log.mqtt.info("PUBLISH: \(publish.payload.toString()), on topic \(publish.varHeader.topicName)")
+                        Log.mqtt.info(.init(stringLiteral: publish.toString()))
+                    case .pingresp(let pingresp):
+                        Log.mqtt.debug(.init(stringLiteral: pingresp.toString()))
+                    case .connack(let connack):
+                        Log.mqtt.debug(.init(stringLiteral: connack.toString()))
+                    default:
+                        Log.mqtt.debug("Received: \(packet)")
+                }
             }
         } catch {
             Log.mqtt.error("Error: \(error)")

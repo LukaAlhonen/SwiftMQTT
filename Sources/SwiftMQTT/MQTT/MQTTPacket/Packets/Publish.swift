@@ -4,7 +4,7 @@ struct PublishVarHeader: Equatable {
     let topicName: String
     let packetId: UInt16?
 
-    init(topicName: ByteBuffer, packetId: UInt16?) throws {
+    init(topicName: Bytes, packetId: UInt16?) throws {
         guard let t = String(bytes: topicName, encoding: .utf8) else {
             throw MQTTError.DecodePacketError(message: "Unable to decode topic name")
         }
@@ -17,10 +17,10 @@ struct PublishVarHeader: Equatable {
         self.packetId = packetId
     }
 
-    func encode() -> ByteBuffer {
-        var bytes: ByteBuffer = []
+    func encode() -> Bytes {
+        var bytes: Bytes = []
 
-        let topicNameBytes: ByteBuffer = ByteBuffer(self.topicName.utf8)
+        let topicNameBytes: Bytes = Bytes(self.topicName.utf8)
         bytes.append(contentsOf: encodeUInt16(UInt16(topicNameBytes.count)))
         bytes.append(contentsOf: topicNameBytes)
         if let packetId = self.packetId {
@@ -41,13 +41,13 @@ struct PublishVarHeader: Equatable {
 }
 
 struct PublishPayload: Equatable {
-    let content: ByteBuffer
+    let content: Bytes
 
-    init(content: ByteBuffer) {
+    init(content: Bytes) {
         self.content = content
     }
 
-    func encode() -> ByteBuffer {
+    func encode() -> Bytes {
         return self.content
     }
 
@@ -61,7 +61,7 @@ struct PublishPayload: Equatable {
     }
 }
 
-struct MQTTPublishPacket: MQTTControlPacket, Equatable {
+struct Publish: MQTTControlPacket, Equatable {
     var fixedHeader: FixedHeader
     var varHeader: PublishVarHeader
     var payload: PublishPayload
@@ -70,7 +70,7 @@ struct MQTTPublishPacket: MQTTControlPacket, Equatable {
     let qos: QoS
     let retain: Bool
 
-    init(bytes: ByteBuffer) throws {
+    init(bytes: Bytes) throws {
         guard let type = MQTTControlPacketType(rawValue: bytes[0] >> 4) else {
             throw MQTTError.DecodePacketError(message: "Invalid packet type: \(bytes[0] >> 4)")
         }
@@ -86,16 +86,16 @@ struct MQTTPublishPacket: MQTTControlPacket, Equatable {
         self.qos = qos
         self.retain = retain
 
-        let msgLen = decodeRemainigLength(bytes)
+        let msgLen = try decodeRemainigLength(bytes)
 
         self.fixedHeader = FixedHeader(type: type, flags: flags, remainingLength: msgLen.value)
 
         // VarHeader
-        let remaining = ByteBuffer(bytes[msgLen.length+1..<bytes.count])
+        let remaining = Bytes(bytes[msgLen.length+1..<bytes.count])
         let topicLenMSB = remaining[0]
         let topicLenLSB = remaining[1]
         let topicLen = (UInt16(topicLenMSB) << 8) | UInt16(topicLenLSB)
-        let topicBytes = ByteBuffer(remaining[2..<2+Int(topicLen)])
+        let topicBytes = Bytes(remaining[2..<2+Int(topicLen)])
         // PacketId only included if QoS > 0
         var packetId: UInt16? = nil
         if qos.rawValue > 0 {
@@ -106,7 +106,7 @@ struct MQTTPublishPacket: MQTTControlPacket, Equatable {
 
         self.varHeader = try PublishVarHeader(topicName: topicBytes, packetId: packetId)
         // Payload
-        self.payload = PublishPayload(content: ByteBuffer(remaining[self.varHeader.encode().count..<remaining.count]))
+        self.payload = PublishPayload(content: Bytes(remaining[self.varHeader.encode().count..<remaining.count]))
     }
 
     init(topicName: String, message: String, packetId: UInt16? = nil, duplicate: Bool = false, qos: QoS, retain: Bool = false) {
@@ -125,11 +125,11 @@ struct MQTTPublishPacket: MQTTControlPacket, Equatable {
         flags |= retainFlag
 
         self.varHeader = .init(topicName: topicName, packetId: packetId)
-        self.payload = .init(content: ByteBuffer(message.utf8))
+        self.payload = .init(content: Bytes(message.utf8))
         self.fixedHeader = .init(type: .PUBLISH, flags: flags, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
     }
 
-    init(topicName: String, message: ByteBuffer, packetId: UInt16? = nil, duplicate: Bool = false, qos: QoS, retain: Bool = false) {
+    init(topicName: String, message: Bytes, packetId: UInt16? = nil, duplicate: Bool = false, qos: QoS, retain: Bool = false) {
         self.dup = duplicate
         self.qos = qos
         self.retain = retain
@@ -149,8 +149,8 @@ struct MQTTPublishPacket: MQTTControlPacket, Equatable {
         self.fixedHeader = .init(type: .PUBLISH, flags: flags, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
     }
 
-    func encode() -> ByteBuffer {
-        var bytes: ByteBuffer = []
+    func encode() -> Bytes {
+        var bytes: Bytes = []
         bytes.append(contentsOf: self.fixedHeader.encode())
         bytes.append(contentsOf: self.varHeader.encode())
         bytes.append(contentsOf: self.payload.encode())

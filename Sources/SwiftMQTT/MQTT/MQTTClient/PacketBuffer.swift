@@ -1,26 +1,28 @@
 import Foundation
 
-actor PacketBuffer {
-    private var queue: [(any MQTTControlPacket)?]
+final actor PacketBuffer<T: Sendable> {
+    private var queue: [T?]
     private let size: Int
     private var tail: Int = 0
     private var head: Int = 0
     private var count = 0
 
-    private var conts: [CheckedContinuation<any MQTTControlPacket, Never>] = []
+    private var conts: [CheckedContinuation<T, Never>] = []
 
     init(size: Int) {
-        if size <= 0 { fatalError("buffer size cannot be less than 1")}
+        if size <= 0 { fatalError("buffer size cannot be less than 1") }
 
         self.size = size
-        self.queue = [(any MQTTControlPacket)?](repeating: nil, count: size)
+        self.queue = [T?](repeating: nil, count: size)
     }
 
-    func push(_ packet: any MQTTControlPacket) {
+    func push(_ packet: T) {
         // if someone is waiting for a packet then give it to them
         if !self.conts.isEmpty {
             let cont = self.conts.removeFirst()
-            cont.resume(returning: packet)
+            DispatchQueue.global().async {
+                cont.resume(returning: packet)
+            }
 
             return
         }
@@ -35,8 +37,8 @@ actor PacketBuffer {
         }
     }
 
-    func next() async -> (any MQTTControlPacket)? {
-        if self.count > 0{
+    func next() async -> T? {
+        if self.count > 0 {
             let packet = self.queue[head]
             self.queue[head] = nil
             self.head = (self.head + 1) % self.size
@@ -45,7 +47,8 @@ actor PacketBuffer {
 
             return packet
         } else {
-            return await withCheckedContinuation { (cont: CheckedContinuation<any MQTTControlPacket, Never>) in
+            return await withCheckedContinuation {
+                (cont: CheckedContinuation<T, Never>) in
                 self.conts.append(cont)
             }
         }

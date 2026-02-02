@@ -1,11 +1,11 @@
-struct MQTTPingreqPacket: MQTTControlPacket {
+struct Pingreq: MQTTControlPacket {
     var fixedHeader: FixedHeader
 
     init() {
         self.fixedHeader = FixedHeader(type: .PINGREQ, flags: 0, remainingLength: 0)
     }
 
-    func encode() -> ByteBuffer {
+    func encode() -> Bytes {
         return self.fixedHeader.encode()
     }
 

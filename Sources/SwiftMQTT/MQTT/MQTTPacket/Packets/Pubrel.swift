@@ -5,7 +5,7 @@ struct PubrelVariableHeader: Equatable {
         self.packetId = packetId
     }
 
-    func encode() -> ByteBuffer {
+    func encode() -> Bytes {
         return encodeUInt16(self.packetId)
     }
 
@@ -14,7 +14,7 @@ struct PubrelVariableHeader: Equatable {
     }
 }
 
-struct MQTTPubrelPacket: MQTTControlPacket {
+struct Pubrel: MQTTControlPacket {
     var fixedHeader: FixedHeader
     var varHeader: PubrelVariableHeader
 
@@ -23,7 +23,7 @@ struct MQTTPubrelPacket: MQTTControlPacket {
         self.varHeader = .init(packetId: packetId)
     }
 
-    init(bytes: ByteBuffer) throws {
+    init(bytes: Bytes) throws {
         guard let type = MQTTControlPacketType(rawValue: bytes[0] >> 4) else {
             throw MQTTError.DecodePacketError(message: "Invalid packet type: \(bytes[0] >> 4)")
         }
@@ -45,8 +45,8 @@ struct MQTTPubrelPacket: MQTTControlPacket {
         self.varHeader = .init(packetId: packetId)
     }
 
-    func encode() -> ByteBuffer {
-        var bytes: ByteBuffer = []
+    func encode() -> Bytes {
+        var bytes: Bytes = []
 
         bytes.append(contentsOf: self.fixedHeader.encode())
         bytes.append(contentsOf: self.varHeader.encode())

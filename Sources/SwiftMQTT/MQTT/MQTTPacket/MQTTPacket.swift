@@ -1,0 +1,16 @@
+enum MQTTPacket {
+    case connack(Connack)
+    case connect(Connect)
+    case disconnect(Disconnect)
+    case pingreq(Pingreq)
+    case pingresp(Pingresp)
+    case puback(Puback)
+    case pubcomp(Pubcomp)
+    case publish(Publish)
+    case pubrec(Pubrec)
+    case pubrel(Pubrel)
+    case suback(Suback)
+    case subscribe(Subscribe)
+    case unsuback(Unsuback)
+    case unsubscribe(Unsubscribe)
+}

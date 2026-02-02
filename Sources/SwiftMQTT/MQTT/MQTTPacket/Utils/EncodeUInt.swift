@@ -1,5 +1,5 @@
-func encodeUInt(_ input: UInt) -> ByteBuffer {
-    var output: ByteBuffer = [];
+func encodeUInt(_ input: UInt) -> Bytes {
+    var output: Bytes = [];
     var X = input
     repeat {
         var encodedByte: UInt8 = UInt8(X % 128)
@@ -13,7 +13,7 @@ func encodeUInt(_ input: UInt) -> ByteBuffer {
     return output
 }
 
-func encodeUInt16(_ input: UInt16) -> ByteBuffer {
+func encodeUInt16(_ input: UInt16) -> Bytes {
     return [
         UInt8(input >> 8),
         UInt8(input & 0xFF)

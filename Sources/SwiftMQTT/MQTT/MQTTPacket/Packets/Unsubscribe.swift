@@ -1,8 +1,8 @@
-struct MQTTUnsubscribePacket: MQTTControlPacket {
+struct Unsubscribe: MQTTControlPacket {
     var fixedHeader: FixedHeader
-    var varHeader: ByteBuffer
-    var payload: ByteBuffer
-    func encode() -> ByteBuffer {
+    var varHeader: Bytes
+    var payload: Bytes
+    func encode() -> Bytes {
         return [0x00]
     }
 
