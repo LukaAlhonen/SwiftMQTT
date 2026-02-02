@@ -13,11 +13,6 @@ final class MQTTClientHandler: ChannelInboundHandler {
         self.client = client
     }
 
-    func channelActive(context: ChannelHandlerContext) {
-        // call onChannelActive or connect or something
-        client?.onChannelActive()
-    }
-
     func channelInactive(context: ChannelHandlerContext) {
         // call onChannelInactive or disconnect idc
         // print("dead")

@@ -1,4 +1,5 @@
 enum MQTTEvent {
     case received(MQTTPacket)
-    case errorr(MQTTError)
+    case error(any Error)
+    case warning(String)
 }

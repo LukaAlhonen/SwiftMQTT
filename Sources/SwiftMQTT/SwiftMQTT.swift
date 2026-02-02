@@ -40,17 +40,23 @@ struct SwiftMQTT {
         }
 
         do {
-            for try await packet in subscriber.packetStream {
-                switch packet {
-                    case .publish(let publish):
-                        // Log.mqtt.info("PUBLISH: \(publish.payload.toString()), on topic \(publish.varHeader.topicName)")
-                        Log.mqtt.info(.init(stringLiteral: publish.toString()))
-                    case .pingresp(let pingresp):
-                        Log.mqtt.debug(.init(stringLiteral: pingresp.toString()))
-                    case .connack(let connack):
-                        Log.mqtt.debug(.init(stringLiteral: connack.toString()))
-                    default:
-                        Log.mqtt.debug("Received: \(packet)")
+            for try await event in subscriber.eventStream {
+                switch event {
+                    case .received(let packet):
+                        switch packet {
+                            case .publish(let publish):
+                                Log.mqtt.info(.init(stringLiteral: publish.toString()))
+                            case .pingresp(let pingresp):
+                                Log.mqtt.debug(.init(stringLiteral: pingresp.toString()))
+                            case .connack(let connack):
+                                Log.mqtt.debug(.init(stringLiteral: connack.toString()))
+                            default:
+                                Log.mqtt.debug("Received: \(packet)")
+                        }
+                    case .error(let error):
+                        Log.mqtt.error("Error: \(error)")
+                    case .warning(let warning):
+                        Log.mqtt.warning("Warning: \(warning)")
                 }
             }
         } catch {

@@ -54,10 +54,10 @@ final class MQTTClient: @unchecked Sendable {
     private var passiveTasks: Set<UInt16> = .init()
     private var idAllocator: PacketIdAllocator = .init()
 
-    private let internalPacketStream: AsyncThrowingStream<MQTTPacket, Error>
-    private let packetContinuation: AsyncThrowingStream<MQTTPacket, Error>.Continuation
-    nonisolated var packetStream: AsyncThrowingStream<MQTTPacket, Error> {
-        internalPacketStream
+    private let internalEventStream: AsyncThrowingStream<MQTTEvent, Error>
+    private let eventContinuation: AsyncThrowingStream<MQTTEvent, Error>.Continuation
+    nonisolated var eventStream: AsyncThrowingStream<MQTTEvent, Error> {
+        internalEventStream
     }
 
 
@@ -90,12 +90,12 @@ final class MQTTClient: @unchecked Sendable {
 
         self.eventLoopGroup = .init()
 
-        var cont: AsyncThrowingStream<MQTTPacket, Error>.Continuation!
-        self.internalPacketStream = AsyncThrowingStream(bufferingPolicy: .bufferingNewest(10)) {
+        var cont: AsyncThrowingStream<MQTTEvent, Error>.Continuation!
+        self.internalEventStream = AsyncThrowingStream(bufferingPolicy: .bufferingNewest(10)) {
             continuation in
             cont = continuation
         }
-        self.packetContinuation = cont
+        self.eventContinuation = cont
     }
 
     func start() async throws {
@@ -110,7 +110,7 @@ final class MQTTClient: @unchecked Sendable {
     func stop() {
         self.disconnect()
 
-        self.packetContinuation.finish()
+        self.eventContinuation.finish()
         self.connectionTask?.cancel()
         self.connectionTask = nil
     }
@@ -175,9 +175,13 @@ extension MQTTClient {
         self.isConnecting = true
 
         defer { self.isConnecting = false }
-        try await self.connect()
-        // should figure out way to propagate errors, perhaps use eventstream
-        try await self.subscribeToTopics()
+        do {
+            try await self.connect()
+            try await self.subscribeToTopics()
+        } catch {
+            self.yieldError(error)
+            throw error
+        }
     }
 
     private func connectionLoop() async  {
@@ -195,20 +199,6 @@ extension MQTTClient {
     private func waitForDisconnect() async {
         await withCheckedContinuation { cont in
             self.disconnectContinuation = cont
-        }
-    }
-
-    private func reconnect() async {
-        if case .connected = self.mqttState { return }
-        if self.isConnecting { return }
-        while !Task.isCancelled {
-            do {
-                try await self.bootstrapChannel()
-
-                break
-            } catch {
-                try? await Task.sleep(for: .seconds(1))
-            }
         }
     }
 
@@ -264,7 +254,6 @@ extension MQTTClient {
 
         // reset ping timer
         self.resetKeepalive()
-        print("SENT \(packet.toString())")
     }
 }
 
@@ -364,12 +353,7 @@ extension MQTTClient {
 // MARK: TCP client handlers
 // TODO: Get rid of all tasks
 extension MQTTClient {
-    func onChannelActive() {
-        print("CHANNEL ACTIVE")
-    }
-
     func onChannelInactive() {
-        print("CHANNEL INACTIVE")
         self.mqttState = .disconnected
 
         self.disconnectContinuation?.resume()
@@ -377,7 +361,6 @@ extension MQTTClient {
     }
 
     func onChannelError(_ error: any Error) {
-        print("CHANNEL ERROR \(error)")
         self.mqttState = .error(error)
 
         self.disconnectContinuation?.resume()
@@ -385,7 +368,7 @@ extension MQTTClient {
     }
 
     func onReceive(_ packet: MQTTPacket) {
-        self.packetContinuation.yield(packet)
+        self.yieldPacket(packet)
 
         switch packet {
             case .connack(let connackPacket):
@@ -394,18 +377,16 @@ extension MQTTClient {
                     self.mqttState = .connected
                     self.connectTask?.stop()
                 default:
-                    // Could create handler or something for mqtt state updates
-                    let err: Error = MQTTError.ConnectError(
+                    let err: MQTTError = MQTTError.ConnectError(
                         returnCode: connackPacket.varHeader.connectReturnCode)
                     self.mqttState = .error(err)
-                    // TODO: propagate error
+                    self.yieldError(err)
                 }
             case .suback(let subackPacket):
                 // TODO: Change this to resume the continuation for the specific sub
                 let packetId = subackPacket.varHeader.packetId
                 guard let timeoutTask = self.activeTasks.removeValue(forKey: packetId) else {
-                    // TODO: Propagate warning
-                    // self.logWarning(message: "Received SUBACK for unknown packetId: \(packetId)")
+                    self.yieldWarning("Received SUBACK for unknown packetId: \(packetId)")
                     break
                 }
 
@@ -417,8 +398,7 @@ extension MQTTClient {
                 // Inspect qos of packet and act accrodingly
                 let topic = publishPacket.varHeader.topicName
                 guard self.topics[topic] != nil else {
-                    // TODO: Propagate warning
-                    // self.logWarning(message: "Recieved PUBLISH for unknown topic")
+                    self.yieldWarning("Recieved PUBLISH for unknown topic")
                     return
                 }
 
@@ -427,29 +407,25 @@ extension MQTTClient {
                 // qos 1 => send puback
                 if qos == .AtLeastOnce {
                     guard let packetId = publishPacket.varHeader.packetId else {
-                        // TODO: Propagate warning
-                        // self.logWarning(message: "Received QoS 1 PUBLISH packet without packet ID")
+                        self.yieldWarning("Received QoS 1 PUBLISH packet without packet ID")
                         return
                     }
                     Task {
                         do {
                             try await self.send(packet: Puback(packetId: packetId))
                         } catch {
-                            // TODO: propagate erorr
-                            // self.logError(error: error)
+                            self.yieldError(error)
                         }
                     }
                 }
 
                 if qos == .ExactlyOnce {
                     guard let packetId = publishPacket.varHeader.packetId else {
-                        // TODO: Propagate warning
-                        // self.logWarning(message: "Received QoS 2 PUBLISH packet without packet ID")
+                        self.yieldWarning("Received QoS 2 PUBLISH packet without packet ID")
                         return
                     }
                     if publishPacket.dup {
-                        // TODO: Propagate warning
-                        // self.logWarning(message: "Received QoS 2 PUBLISH packet with dup flag set")
+                        self.yieldWarning("Received QoS 2 PUBLISH packet with dup flag set")
                     }
 
                     // store packetId, send pubrec and init onward delivery of message
@@ -459,19 +435,15 @@ extension MQTTClient {
                         do {
                             try await self.send(packet: Pubrec(packetId: packetId))
                         } catch {
-                            // TODO: Propagate error
-                            // self.logError(error: error)
+                            self.yieldError(error)
                         }
                     }
                 }
-
-                self.packetContinuation.yield(packet)
             case .pubrel(let pubrelPacket):
                 let packetId = pubrelPacket.varHeader.packetId
 
                 if !self.passiveTasks.contains(packetId) {
-                    // TODO: Propagate warning
-                    // self.logWarning(message: "Received PUBREL with unknown packetID: \(packetId)")
+                    self.yieldWarning("Received PUBREL with unknown packetID: \(packetId)")
                     return
                 }
 
@@ -481,16 +453,14 @@ extension MQTTClient {
                     do {
                         try await self.send(packet: Pubcomp(packetId: packetId))
                     } catch {
-                        // TODO: Propagate error
-                        // self.logError(error: error)
+                        self.yieldError(error)
                     }
                 }
             case .puback(let pubackPacket):
                 let packetId = pubackPacket.varHeader.packetId
 
                 guard var task = self.activeTasks.removeValue(forKey: packetId) else {
-                    // TODO: Propagate warning
-                    // self.logWarning(message: "Recieved PUBACK with unknown packetId")
+                    self.yieldWarning("Recieved PUBACK with unknown packetId")
                     return
                 }
                 task.timeout?.stop()
@@ -499,8 +469,7 @@ extension MQTTClient {
             case .pubrec(let pubrecPacket):
                 let packetId = pubrecPacket.varHeader.packetId
                 guard let task = self.activeTasks.removeValue(forKey: packetId) else {
-                    // TODO: Propagate warning
-                    // self.logWarning(message: "Received PUBREC with unknown packetId")
+                    self.yieldWarning("Received PUBREC with unknown packetId")
                     return
                 }
                 task.timeout?.stop()
@@ -508,8 +477,7 @@ extension MQTTClient {
             case .pubcomp(let pubcompPacket):
                 let packetId = pubcompPacket.varHeader.packetId
                 guard let task = self.activeTasks.removeValue(forKey: packetId) else {
-                    // TODO: Propagate warning
-                    // self.logWarning(message: "Received PUBCOMP with unknown packetId")
+                    self.yieldWarning("Received PUBCOMP with unknown packetId")
                     return
                 }
                 task.timeout?.stop()
@@ -575,11 +543,25 @@ extension MQTTClient {
     }
 
     private func handlePingTimeout() {
-        // TODO: Propagate error
-        // self.logError(error: MQTTError.Timeout(reason: "ping timed out"))
+        self.yieldError(MQTTError.Timeout(reason: "ping timed out"))
 
         // TODO: Add option to try reconnect if ping times out
         // if config.retry
         self.disconnect()
+    }
+}
+
+// MARK: eventContinuation yield helpers
+extension MQTTClient {
+    private func yieldPacket(_ packet: MQTTPacket) {
+        self.eventContinuation.yield(.received(packet))
+    }
+
+    private func yieldError(_ error: any Error) {
+        self.eventContinuation.yield(.error(error))
+    }
+
+    private func yieldWarning(_ warning: String) {
+        self.eventContinuation.yield(.warning(warning))
     }
 }
