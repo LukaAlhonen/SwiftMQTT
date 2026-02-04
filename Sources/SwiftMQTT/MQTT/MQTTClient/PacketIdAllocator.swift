@@ -1,4 +1,4 @@
-class PacketIdAllocator {
+actor PacketIdAllocator {
     private var free: UInt16
     private var allocated: Set<UInt16>
 

@@ -28,6 +28,14 @@ enum SubscribeState {
     case Done
 }
 
+enum Effect {
+    case send(any MQTTControlPacket)
+    case startTimer
+    case cancelTimer
+    case emit
+    case disconnect
+}
+
 final class MQTTClient: @unchecked Sendable {
     // MQTT client vars
     private let clientId: String
@@ -101,7 +109,6 @@ final class MQTTClient: @unchecked Sendable {
     func start() async throws {
         if case .connected = self.mqttState { return }
 
-        // try await self.tryConnect()
         self.connectionTask = Task {
             await connectionLoop()
         }
@@ -210,6 +217,8 @@ extension MQTTClient {
         self.pingTask = nil
         self.connectTask?.stop()
         self.connectTask = nil
+        self.connectionTask?.cancel()
+        self.connectionTask = nil
 
         if case .connected = self.mqttState {
             Task {
@@ -351,13 +360,13 @@ extension MQTTClient {
 }
 
 // MARK: TCP client handlers
-// TODO: Get rid of all tasks
 extension MQTTClient {
     func onChannelInactive() {
         self.mqttState = .disconnected
 
         self.disconnectContinuation?.resume()
         self.disconnectContinuation = nil
+        self.yieldError(MQTTError.Disconnected)
     }
 
     func onChannelError(_ error: any Error) {
@@ -365,6 +374,7 @@ extension MQTTClient {
 
         self.disconnectContinuation?.resume()
         self.disconnectContinuation = nil
+        self.yieldError(error)
     }
 
     func onReceive(_ packet: MQTTPacket) {

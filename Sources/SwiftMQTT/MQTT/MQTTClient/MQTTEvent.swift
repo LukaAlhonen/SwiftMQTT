@@ -1,5 +1,17 @@
-enum MQTTEvent {
+enum MQTTEvent: Sendable {
     case received(MQTTPacket)
     case error(any Error)
     case warning(String)
+}
+
+enum MQTTInternalEvent: Sendable {
+    case packet(MQTTPacket)
+    case send(any MQTTControlPacket)
+    case connectionActive
+    case connectionInactive
+    case connectionError(any Error)
+}
+
+enum MQTTInternalCommand: Sendable {
+    case send(any MQTTControlPacket)
 }
