@@ -62,7 +62,10 @@ actor MQTTConnection {
 
     func send(packet: any MQTTControlPacket) async throws {
         guard let channel = self.channel else { return }
+        let bytes = packet.encode()
+        var buffer = channel.channel.allocator.buffer(capacity: bytes.count)
+        buffer.writeBytes(bytes)
 
-        try await channel.channel.writeAndFlush(packet)
+        try await channel.channel.writeAndFlush(buffer)
     }
 }

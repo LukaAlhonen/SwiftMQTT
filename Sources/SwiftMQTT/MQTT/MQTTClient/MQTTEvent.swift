@@ -2,6 +2,7 @@ enum MQTTEvent: Sendable {
     case received(MQTTPacket)
     case error(any Error)
     case warning(String)
+    case info(String)
 }
 
 enum MQTTInternalEvent: Sendable {

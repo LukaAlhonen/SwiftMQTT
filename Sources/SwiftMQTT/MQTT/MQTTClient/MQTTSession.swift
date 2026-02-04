@@ -1,5 +1,22 @@
 import Foundation
 
+enum PublishQoS1State {
+    case publishSent
+    case pubAckReceived
+}
+
+enum PublishQoS2State {
+    case publishSent
+    case pubRecReceived
+    case pubRelSent
+    case pubCompReceived
+}
+
+enum SubscribeState {
+    case SubscribeSent
+    case Done
+}
+
 actor MQTTSession {
     private let config: Config
     private let eventBus: MQTTEventBus<MQTTEvent>
@@ -34,6 +51,7 @@ actor MQTTSession {
             case .send(let packet):
                 self.handleSend(packet: packet)
             case .packet(let packet):
+                self.eventBus.emit(.received(packet))
                 self.handlePacket(packet: packet)
             case .connectionError(let error):
                 self.eventBus.emit(.error(error))
@@ -41,8 +59,7 @@ actor MQTTSession {
                 // TODO: emit error instead
                 self.eventBus.emit(.warning("Connection inactive"))
             case .connectionActive:
-                // TODO: add info message event
-                self.eventBus.emit(.warning("Connection active"))
+                self.eventBus.emit(.info("Connection active"))
         }
     }
 
@@ -228,7 +245,7 @@ extension MQTTSession {
                 }
                 self.commandBus.emit(.send(Pubrec(packetId: packetId)))
                 self.passiveTasks.insert(packetId)
-                self.eventBus.emit(.received(.publish(publish)))
+                // self.eventBus.emit(.received(.publish(publish)))
             case .AtLeastOnce:
                 guard let packetId = publish.varHeader.packetId else {
                     // TODO: Close connection instead of warning
@@ -237,9 +254,10 @@ extension MQTTSession {
                 }
                 self.commandBus.emit(.send(Puback(packetId: packetId)))
                 self.passiveTasks.insert(packetId)
-                self.eventBus.emit(.received(.publish(publish)))
+                // self.eventBus.emit(.received(.publish(publish)))
             case .AtMostOnce:
-                self.eventBus.emit(.received(.publish(publish)))
+                break
+                // self.eventBus.emit(.received(.publish(publish)))
         }
     }
 
@@ -266,7 +284,8 @@ extension MQTTSession {
     }
 
     private func handlePubrel(_ pubrel: Pubrel) {
-        guard let packetId = self.passiveTasks.remove(pubrel.varHeader.packetId) else {
+        let packetId = pubrel.varHeader.packetId
+        guard self.passiveTasks.contains(packetId) else {
             // TODO: Throw error and close connection
             self.eventBus.emit(.warning("Received pubrel for unknown packetId"))
             return
@@ -382,7 +401,7 @@ extension MQTTSession {
 extension MQTTSession {
     private func startKeepAlive(cont: CheckedContinuation<Void, Never>) {
         self.keepAliveTask = Task {
-            try? await Task.sleep(for: .seconds(Double(self.config.keepAlive)))
+            try? await Task.sleep(for: .seconds(Double(self.config.keepAlive) * 0.5))
             cont.resume()
             self.keepAliveCont = nil
         }
