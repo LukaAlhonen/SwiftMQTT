@@ -64,7 +64,8 @@ actor MQTTClient {
 
 extension MQTTClient {
     func connect() async throws {
-        try await self.tryConnect()
+        // try await self.tryConnect()
+        try await self.connectLoop()
         self.startKeepAlive()
     }
 
@@ -74,17 +75,25 @@ extension MQTTClient {
         try await self.session.awaitConack()
     }
 
-    private func reconnect() async throws {
+    private func connectLoop() async throws {
         var attempts = 0
 
         while attempts <= self.config.maxRetries {
             do {
                 try await self.tryConnect()
-                break
+                return
             } catch {
-                attempts += 1
+                attempts = attempts + 1
             }
         }
+
+        throw MQTTError.connectionError(.disconnected)
+    }
+
+    private func reconnect() async throws {
+        try await self.connectLoop()
+        // resub
+        try await self.subscribeToTopics()
     }
 }
 
@@ -155,11 +164,6 @@ extension MQTTClient {
 
                 do {
                     try await self.send(Pingreq())
-                } catch {
-                    self.eventBus.emit(.error(error))
-                }
-
-                do {
                     try await session.awaitPingresp()
                 } catch {
                     self.eventBus.emit(.error(error))
