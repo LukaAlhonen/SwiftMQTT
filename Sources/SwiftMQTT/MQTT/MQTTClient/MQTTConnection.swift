@@ -68,4 +68,8 @@ actor MQTTConnection {
 
         try await channel.channel.writeAndFlush(buffer)
     }
+
+    func close() async throws {
+        try await self.channel?.channel.close()
+    }
 }

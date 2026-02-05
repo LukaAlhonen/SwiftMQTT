@@ -14,9 +14,11 @@ final class TimeoutTask: @unchecked Sendable {
     private var cont: CheckedContinuation<Void, Error>?
     private var timeout: Duration
     private var completedResult: Result<Void, Error>?
+    private let kind: TimeoutKind
 
-    init(timeout: UInt16) {
+    init(timeout: UInt16, kind: TimeoutKind) {
         self.timeout = .seconds(Double(timeout))
+        self.kind = kind
     }
 
     func start() {
@@ -27,7 +29,7 @@ final class TimeoutTask: @unchecked Sendable {
         self.task = Task {
             do {
                 try await Task.sleep(for: self.timeout)
-                self.finish(result: .failure(MQTTError.Timeout(reason: "Task timed out")))
+                self.finish(result: .failure(MQTTError.timeout(self.kind)))
             } catch {
                 // timer cancelled
             }

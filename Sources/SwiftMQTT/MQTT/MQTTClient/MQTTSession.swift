@@ -56,8 +56,7 @@ actor MQTTSession {
             case .connectionError(let error):
                 self.eventBus.emit(.error(error))
             case .connectionInactive:
-                // TODO: emit error instead
-                self.eventBus.emit(.warning("Connection inactive"))
+                self.eventBus.emit(.error(MQTTError.connectionError(.disconnected)))
             case .connectionActive:
                 self.eventBus.emit(.info("Connection active"))
         }
@@ -79,15 +78,16 @@ actor MQTTSession {
                 self.handleConnack(connack)
             case .suback(let suback):
                 self.handleSuback(suback)
+            case .pingresp(let pingresp):
+                self.handlePingresp(pingresp)
             default:
-                // TODO: Throw error and close connection
+                self.commandBus.emit(.disconnect(MQTTError.protocolViolation(.unexpectedPacket(packet: packet.inner().fixedHeader.type))))
                 return
         }
     }
 
     private func handleSend(packet: any MQTTControlPacket) {
-        // reset keepalive
-        // emit send event
+        self.resetKeepAlive()
 
         // start timer based on packet type and qos
         switch packet.fixedHeader.type {
@@ -112,6 +112,9 @@ actor MQTTSession {
             case .PUBCOMP:
                 guard let pubcomp = packet as? Pubcomp else { return }
                 self.handleSendPubcomp(pubcomp)
+            case .PINGREQ:
+                guard let pingreq = packet as? Pingreq else { return }
+                self.handleSendPingreq(pingreq)
             default:
                 break
         }
@@ -125,22 +128,21 @@ extension MQTTSession {
         switch publish.qos {
             // QoS 2
             case .ExactlyOnce:
-                // should define separate timeout for publish in config
                 guard let packetId = publish.varHeader.packetId else {
-                    // should probably emit error or more realistically crash the client
-                    self.eventBus.emit(.warning("Attempt to send QoS 2 publish without packetId"))
+                    self.commandBus.emit(.disconnect(MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))))
                     return
                 }
-                let timeoutTask = TimeoutTask(timeout: 10)
+                // should define separate timeout for publish in config
+                let timeoutTask = TimeoutTask(timeout: 10, kind: .publish(packetId: packetId, qos: .ExactlyOnce))
                 timeoutTask.start()
                 self.activeTasks[packetId] = InflightTask(state: .publishQoS2(.publishSent), timeout: timeoutTask)
             case .AtLeastOnce:
                 guard let packetId = publish.varHeader.packetId else {
-                    self.eventBus.emit(.warning("Attempt to send QoS 1 publish without packetId"))
+                    self.commandBus.emit(.disconnect(MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))))
                     return
                 }
 
-                let timeoutTask = TimeoutTask(timeout: 10)
+                let timeoutTask = TimeoutTask(timeout: 10, kind: .publish(packetId: packetId, qos: .AtLeastOnce))
                 timeoutTask.start()
                 self.activeTasks[packetId] = InflightTask(state: .publishQoS1(.publishSent), timeout: timeoutTask)
             case .AtMostOnce:
@@ -151,16 +153,14 @@ extension MQTTSession {
     private func handleSendPubrel(_ pubrel: Pubrel) {
         let packetId = pubrel.varHeader.packetId
         // TODO: set timout in config
-        let timeoutTask = TimeoutTask(timeout: 10)
+        let timeoutTask = TimeoutTask(timeout: 10, kind: .publish(packetId: packetId, qos: .ExactlyOnce))
         timeoutTask.start()
         self.activeTasks[packetId] = InflightTask(state: .publishQoS2(.pubRelSent), timeout: timeoutTask)
     }
 
     private func handleSendPuback(_ puback: Puback) {
-        // let packetId =
         guard self.passiveTasks.remove(puback.varHeader.packetId) != nil else {
-            // TODO: Throw error and close connection
-            self.eventBus.emit(.warning("Sent puback for unkown packetId"))
+            self.commandBus.emit(.disconnect(MQTTError.protocolViolation(.unknownPacketId(packetId: puback.varHeader.packetId))))
             return
         }
     }
@@ -168,16 +168,14 @@ extension MQTTSession {
     private func handleSendPubrec(_ pubrec: Pubrec) {
         let packetId = pubrec.varHeader.packetId
         guard self.passiveTasks.contains(packetId) else {
-            // TODO: Throw error and close connection
-            self.eventBus.emit(.warning("Sent pubrec for unknown packetId"))
+            self.commandBus.emit(.disconnect(MQTTError.protocolViolation(.unknownPacketId(packetId: packetId))))
             return
         }
     }
 
     private func handleSendPubcomp(_ pubcomp: Pubcomp) {
         guard self.passiveTasks.remove(pubcomp.varHeader.packetId) != nil else {
-            // TODO: Throw error and close connection
-            self.eventBus.emit(.warning("Sent pubcomp for unknown packetId"))
+            self.commandBus.emit(.disconnect(MQTTError.protocolViolation(.unknownPacketId(packetId: pubcomp.varHeader.packetId))))
             return
         }
     }
@@ -188,19 +186,19 @@ extension MQTTSession {
         self.subscriptions.append(contentsOf: topicFilters)
 
         // TODO: Define duration in config
-        let timeoutTask = TimeoutTask(timeout: 10)
+        let timeoutTask = TimeoutTask(timeout: 10, kind: .subscribe(packetId: packetId))
         timeoutTask.start()
         self.activeTasks[packetId] = InflightTask(state: .subscribe(.SubscribeSent), timeout: timeoutTask)
     }
 
     private func handleSendConnect(_ connect: Connect) {
-        let timer = TimeoutTask(timeout: self.config.connTimeout)
+        let timer = TimeoutTask(timeout: self.config.connTimeout, kind: .connect)
         timer.start()
         self.connackTask = timer
     }
 
     private func handleSendPingreq(_ pingreq: Pingreq) {
-        let timeoutTask = TimeoutTask(timeout: self.config.pingTimeout)
+        let timeoutTask = TimeoutTask(timeout: self.config.pingTimeout, kind: .ping)
         timeoutTask.start()
         self.pingrespTask = timeoutTask
     }
@@ -213,23 +211,31 @@ extension MQTTSession {
 
         if case .ConnectionAccepted = returnCode {
             guard let connackTask = self.connackTask else {
-                // TODO: maybe throw error here
+                self.commandBus.emit(.disconnect(MQTTError.unexpectedError("Connack timeoutTask should not be nil")))
                 return
             }
 
             connackTask.stop()
             self.connackTask = nil
         } else {
-            // TODO: Throw error and close connection
-            self.eventBus.emit(.warning("Connection rejected with error code: \(returnCode)"))
+            self.commandBus.emit(.disconnect(MQTTError.connectionError(.rejected(returnCode: returnCode))))
         }
+    }
+
+    private func handlePingresp(_ pingresp: Pingresp) {
+        guard let pingrespTask = self.pingrespTask else {
+            self.commandBus.emit(.disconnect(MQTTError.unexpectedError("Pingresp task should not be nil")))
+            return
+        }
+
+        pingrespTask.stop()
+        self.pingrespTask = nil
     }
 
     private func handleSuback(_ suback: Suback) {
         let packetId = suback.varHeader.packetId
         guard let subackTask = self.activeTasks.removeValue(forKey: packetId) else {
-            // TODO: throw error and close connection
-            self.eventBus.emit(.warning("Received suback for unknown packetId"))
+            self.commandBus.emit(.disconnect(MQTTError.protocolViolation(.unexpectedPacket(packet: .SUBACK))))
             return
         }
         subackTask.timeout?.stop()
@@ -239,25 +245,20 @@ extension MQTTSession {
         switch publish.qos {
             case .ExactlyOnce:
                 guard let packetId = publish.varHeader.packetId else {
-                    // TODO: Close connection instead of warning
-                    self.eventBus.emit(.warning("Received QoS 2 publish without packetId"))
+                    self.commandBus.emit(.disconnect(MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))))
                     return
                 }
                 self.commandBus.emit(.send(Pubrec(packetId: packetId)))
                 self.passiveTasks.insert(packetId)
-                // self.eventBus.emit(.received(.publish(publish)))
             case .AtLeastOnce:
                 guard let packetId = publish.varHeader.packetId else {
-                    // TODO: Close connection instead of warning
-                    self.eventBus.emit(.warning("Received QoS 1 publish without packetId"))
+                    self.commandBus.emit(.disconnect(MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))))
                     return
                 }
                 self.commandBus.emit(.send(Puback(packetId: packetId)))
                 self.passiveTasks.insert(packetId)
-                // self.eventBus.emit(.received(.publish(publish)))
             case .AtMostOnce:
                 break
-                // self.eventBus.emit(.received(.publish(publish)))
         }
     }
 
@@ -286,8 +287,7 @@ extension MQTTSession {
     private func handlePubrel(_ pubrel: Pubrel) {
         let packetId = pubrel.varHeader.packetId
         guard self.passiveTasks.contains(packetId) else {
-            // TODO: Throw error and close connection
-            self.eventBus.emit(.warning("Received pubrel for unknown packetId"))
+            self.commandBus.emit(.disconnect(MQTTError.protocolViolation(.unexpectedPacket(packet: .PUBREL))))
             return
         }
         self.commandBus.emit(.send(Pubcomp(packetId: packetId)))
@@ -296,8 +296,7 @@ extension MQTTSession {
     private func handlePubcomp(_ pubcomp: Pubcomp) {
         let packetId = pubcomp.varHeader.packetId
         guard let inflighTask = self.activeTasks.removeValue(forKey: packetId) else {
-            // should close connection here
-            self.eventBus.emit(.warning("Received pubcomp for unknown packetId"))
+            self.commandBus.emit(.disconnect(MQTTError.protocolViolation(.unexpectedPacket(packet: .PUBCOMP))))
             return
         }
 
@@ -319,8 +318,7 @@ extension MQTTSession {
 
     func awaitPingresp() async throws {
         guard let pingrespTask = self.pingrespTask else {
-            // TODO: throw error
-            return
+            throw MQTTError.unexpectedError("Pingresp task should not be nil")
         }
 
         try await pingrespTask.wait()
@@ -328,8 +326,7 @@ extension MQTTSession {
 
     func awaitConack() async throws {
         guard let connackTask = self.connackTask else {
-            // TODO: Throw error
-            return
+            throw MQTTError.unexpectedError("Connack task should not be nil")
         }
 
         try await connackTask.wait()
@@ -337,62 +334,63 @@ extension MQTTSession {
 
     func awaitSuback(packetId: UInt16) async throws {
         guard let subackTask = self.activeTasks[packetId] else {
-            // TODO: throw error
-            return
+            throw MQTTError.unexpectedError("Suback task for packetId \(packetId) should not be nil")
         }
 
         switch subackTask.state {
             case .subscribe(.SubscribeSent):
                 try await subackTask.timeout?.wait()
             default:
-                // TODO: throw error
-                return
+                // TODO: perhaps change string to inflightstate
+                throw MQTTError.protocolViolation(
+                    .invalidState(expected: "\(InflightState.subscribe(.SubscribeSent))", acutal: "\(subackTask.state)")
+                )
         }
 
     }
 
     func awaitPuback(packetId: UInt16) async throws {
         guard let pubackTask = self.activeTasks[packetId] else {
-            // TODO: throw error
-            return
+            throw MQTTError.unexpectedError("Puback task for packetId \(packetId) should not be nil")
         }
 
         switch pubackTask.state {
             case .publishQoS1(.publishSent):
                 try await pubackTask.timeout?.wait()
             default:
-                // TODO: throw error
-                return
+                throw MQTTError.protocolViolation(
+                    .invalidState(expected: "\(InflightState.publishQoS1(.publishSent))", acutal: "\(pubackTask.state)")
+                )
         }
     }
 
     func awaitPubrec(packetId: UInt16) async throws {
         guard let pubrecTask = self.activeTasks[packetId] else {
-            // TODO: throw error
-            return
+            throw MQTTError.unexpectedError("Pubrec task for packetId \(packetId) should not be nil")
         }
 
         switch pubrecTask.state {
             case .publishQoS2(.publishSent):
                 try await pubrecTask.timeout?.wait()
             default:
-                // TODO: throw error
-                return
+                throw MQTTError.protocolViolation(
+                    .invalidState(expected: "\(InflightState.publishQoS2(.publishSent))", acutal: "\(pubrecTask.state)")
+                )
         }
     }
 
     func awaitPubComp(packetId: UInt16) async throws {
         guard let pubcompTask = self.activeTasks[packetId] else {
-            // TODO: throw error
-            return
+            throw MQTTError.unexpectedError("Pubcomp task for packetId \(packetId) should not be nil")
         }
 
         switch pubcompTask.state {
             case .publishQoS2(.pubRelSent):
                 try await pubcompTask.timeout?.wait()
             default:
-                // TODO: throw error
-                return
+                throw MQTTError.protocolViolation(
+                    .invalidState(expected: "\(InflightState.publishQoS2(.pubRelSent))", acutal: "\(pubcompTask.state)")
+                )
         }
     }
 }
@@ -401,9 +399,12 @@ extension MQTTSession {
 extension MQTTSession {
     private func startKeepAlive(cont: CheckedContinuation<Void, Never>) {
         self.keepAliveTask = Task {
-            try? await Task.sleep(for: .seconds(Double(self.config.keepAlive) * 0.5))
-            cont.resume()
-            self.keepAliveCont = nil
+            do {
+                try await Task.sleep(for: .seconds(Double(self.config.keepAlive) * 0.5))
+                cont.resume()
+                self.keepAliveCont = nil
+            } catch {
+            }
         }
     }
 

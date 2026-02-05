@@ -8,4 +8,8 @@ final class MQTTEventBus<T: Sendable>: Sendable {
     func emit(_ event: T) {
         continuation.yield(event)
     }
+
+    func finnish() {
+        continuation.finish()
+    }
 }
