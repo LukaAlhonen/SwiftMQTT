@@ -18,7 +18,7 @@ struct SwiftMQTT {
             clientId: "sub-1",
             host: host,
             port: port,
-            config: .init(keepAlive: 5)
+            config: .init(keepAlive: 5, maxRetries: 10)
         )
 
         do {
