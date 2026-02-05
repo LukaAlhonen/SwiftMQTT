@@ -1,3 +1,4 @@
+// TODO: replace with mqtt error
 enum DecodeConnackError: Error {
     case InvalidPacketType
     case InvalidRemainingLength
@@ -78,6 +79,11 @@ struct Connack: MQTTControlPacket {
         }
 
         self.varHeader = ConnackVariableHeader(sessionPresent: bytes[2], connectReturnCode: connectionReturnCode)
+    }
+
+    init(returnCode: ConnectReturnCode, sessionPresent: Bool) {
+        self.fixedHeader = FixedHeader(type: .CONNACK, flags: 0, remainingLength: 2)
+        self.varHeader = ConnackVariableHeader(sessionPresent: sessionPresent ? 1 : 0, connectReturnCode: returnCode)
     }
 
     func encode() -> Bytes {

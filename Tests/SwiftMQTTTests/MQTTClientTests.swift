@@ -1,6 +1,43 @@
 import Testing
 @testable import SwiftMQTT
 
+@Test("Connect to broker and check that keepalive works") func connectClient() async {
+    let config = Config(keepAlive: 2)
+    let client = MQTTClient(clientId: "test-client", host: "localhost", port: 1883, config: config)
+
+    let _ = try! await withTimeout(seconds: 1) {
+        try await client.connect()
+    }
+
+    let task = Task {
+        var packets: [any MQTTControlPacket] = []
+        for await event in await client.eventStream {
+            switch event {
+                case .received(let packet):
+                    packets.append(packet.inner())
+                case .send(let packet):
+                    packets.append(packet)
+                default:
+                    break
+            }
+            if packets.count >= 6 { return packets }
+        }
+
+        throw TestError.emptyPacketStream
+    }
+
+    let packets = try! await withTimeout(seconds: 10) {
+        try await task.value
+    }
+
+    #expect(packets[0] as? Connect == Connect(clientId: "test-client", keepAlive: config.keepAlive))
+    #expect(packets[1] as? Connack == Connack(returnCode: .ConnectionAccepted, sessionPresent: false))
+    #expect(packets[2] as? Pingreq == Pingreq())
+    #expect(packets[3] as? Pingresp == Pingresp())
+    #expect(packets[4] as? Pingreq == Pingreq())
+    #expect(packets[5] as? Pingresp == Pingresp())
+}
+
 @Test("QoS 0 publish and subscribe") func qos0PubSub() async {
     let subscriber: MQTTClient = .init(clientId: "test-sub", host: "localhost", port: 1883, config: .init())
     let publisher: MQTTClient = .init(clientId: "test-pub", host: "localhost", port: 1883, config: .init())
