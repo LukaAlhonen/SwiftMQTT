@@ -181,11 +181,12 @@ extension MQTTClient {
 }
 
 extension MQTTClient {
-    func stop() {
-
+    func stop() async {
+        await self.disconnect()
     }
 
-    private func disconnect(with error: (any Error)?) async {
+    private func disconnect(with error: (any Error)? = nil) async {
+        try? await self.send(Disconnect())
         try? await self.connection.close()
         if let error = error {
             self.eventBus.emit(.error(error))

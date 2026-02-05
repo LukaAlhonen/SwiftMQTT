@@ -38,6 +38,7 @@ struct SwiftMQTT {
             Log.mqtt.error("Error subscribing: \(error)")
         }
 
+        var i = 0
         for try await event in subscriber.eventStream {
             switch event {
                 case .received(let packet):
@@ -49,6 +50,8 @@ struct SwiftMQTT {
                 case .info(let message):
                     Log.mqtt.info(.init(stringLiteral: message))
             }
+            if i >= 5 { await subscriber.stop(); break }
+            i += 1
         }
     }
 }
