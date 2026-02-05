@@ -4,7 +4,7 @@ import Testing
 
 @Test("Create/Decode Connack Packet") func createConnackPacket() {
     let rawConnack: Bytes = [0x20, 0x02, 0x00, 0x00]
-    let connackPacket = try! Connack(data: rawConnack)
+    let connackPacket = try! Connack(bytes: rawConnack)
     #expect(connackPacket.fixedHeader == FixedHeader(type: .CONNACK, flags: 0, remainingLength: 2))
     #expect(
         connackPacket.varHeader
@@ -13,7 +13,7 @@ import Testing
 
 @Test("Encode Connack Packet") func encodeConnackPacket() {
     let rawConnack: Bytes = [0x20, 0x02, 0x00, 0x00]
-    let connackPacket = try! Connack(data: rawConnack)
+    let connackPacket = try! Connack(bytes: rawConnack)
 
     #expect(connackPacket.fixedHeader.encode() == [0x20, 0x02])
     #expect(connackPacket.varHeader.encode() == [0x00, 0x00])

@@ -88,6 +88,7 @@ actor MQTTSession {
 
     private func handleSend(packet: any MQTTControlPacket) {
         self.resetKeepAlive()
+        self.eventBus.emit(.send(packet))
 
         // start timer based on packet type and qos
         switch packet.fixedHeader.type {

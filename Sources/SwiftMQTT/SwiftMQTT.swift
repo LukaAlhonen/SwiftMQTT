@@ -49,6 +49,8 @@ struct SwiftMQTT {
                     Log.mqtt.warning("Warning: \(warning)")
                 case .info(let message):
                     Log.mqtt.info(.init(stringLiteral: message))
+                case .send(let packet):
+                    Log.mqtt.debug("Sent: \(packet.toString())")
             }
             if i >= 5 { await subscriber.stop(); break }
             i += 1
