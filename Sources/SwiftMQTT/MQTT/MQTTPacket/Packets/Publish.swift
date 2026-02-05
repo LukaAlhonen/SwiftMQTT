@@ -6,7 +6,7 @@ struct PublishVarHeader: Equatable {
 
     init(topicName: Bytes, packetId: UInt16?) throws {
         guard let t = String(bytes: topicName, encoding: .utf8) else {
-            throw MQTTError.DecodePacketError(message: "Unable to decode topic name")
+            throw MQTTError.unexpectedError("Unable to decode topic name")
         }
         self.topicName = t
         self.packetId = packetId
@@ -71,14 +71,15 @@ struct Publish: MQTTControlPacket, Equatable {
     let retain: Bool
 
     init(bytes: Bytes) throws {
-        guard let type = MQTTControlPacketType(rawValue: bytes[0] >> 4) else {
-            throw MQTTError.DecodePacketError(message: "Invalid packet type: \(bytes[0] >> 4)")
+        let typeBytes = bytes[0] >> 4
+        guard let type = MQTTControlPacketType(rawValue: typeBytes) else {
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidType(expected: .PUBLISH, actual: typeBytes)))
         }
 
         let flags = bytes[0] & 0b00001111
         let dup = (flags >> 3) == 1 ? true : false
         guard let qos = QoS(rawValue: ((flags & 0b00000111) >> 1)) else {
-            throw MQTTError.DecodePacketError(message: "Invalid QoS")
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidQoS))
         }
         let retain = (flags & 0b00000001) == 1 ? true : false
 

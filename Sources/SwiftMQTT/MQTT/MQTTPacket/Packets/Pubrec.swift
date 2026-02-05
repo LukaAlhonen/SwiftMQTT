@@ -24,17 +24,18 @@ struct Pubrec: MQTTControlPacket {
     }
 
     init(bytes: Bytes) throws {
+        let typeBytes = bytes[0] >> 4
         guard let type = MQTTControlPacketType(rawValue: bytes[0] >> 4) else {
-            throw MQTTError.DecodePacketError(message: "Invalid mqtt packet type")
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidType(expected: .PUBREC, actual: typeBytes)))
         }
 
         if type != .PUBREC {
-            throw MQTTError.DecodePacketError(message: "Incorrect packet type, expected PUBCOMP, received: \(type.toString())")
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectType(expected: .PUBCOMP, actual: type)))
         }
 
         let flags = bytes[0] & 0b00001111
         if flags != 0 {
-            throw MQTTError.DecodePacketError(message: "Invalid flags")
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidFlags(expected: 0, actual: flags)))
         }
 
         let msgLen = bytes[1]

@@ -54,6 +54,8 @@ actor MQTTClient {
                     case .send(let packet):
                         // should handle error here
                         try? await self.send(packet)
+                    case .disconnect(let error):
+                        await self.disconnect(with: error)
                 }
             }
         }
@@ -151,24 +153,39 @@ extension MQTTClient {
             while !Task.isCancelled {
                 await session.awaitKeepAlive()
 
-                // TODO: handle error
-                try? await self.send(Pingreq())
-                // try session.awaitPingResp()
+                do {
+                    try await self.send(Pingreq())
+                } catch {
+                    self.eventBus.emit(.error(error))
+                }
+
                 do {
                     try await session.awaitPingresp()
                 } catch {
-                    // reconnect
+                    self.eventBus.emit(.error(error))
                     do {
-                        self.eventBus.emit(.error(error))
                         try await self.reconnect()
                     } catch {
-                        // TODO: call disconnect(with: error)
-                        self.eventBus.emit(.error(error))
+                        await self.disconnect(with: error)
                     }
                 }
             }
         }
 
         self.keepAliveTask = task
+    }
+}
+
+extension MQTTClient {
+    func stop() {
+
+    }
+
+    private func disconnect(with error: (any Error)?) async {
+        try? await self.connection.close()
+        if let error = error {
+            self.eventBus.emit(.error(error))
+        }
+        self.eventBus.finnish()
     }
 }

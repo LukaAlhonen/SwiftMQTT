@@ -1,4 +1,4 @@
-enum MQTTPacket {
+enum MQTTPacket: Equatable {
     case connack(Connack)
     case connect(Connect)
     case disconnect(Disconnect)

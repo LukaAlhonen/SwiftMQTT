@@ -6,7 +6,6 @@ import Logging
 struct SwiftMQTT {
     static func main() async {
         // set loglevel
-        // TODO: update client to take logger as input
         LoggingSystem.bootstrap { label in
             var handler = StreamLogHandler.standardOutput(label: label)
             handler.logLevel = .debug

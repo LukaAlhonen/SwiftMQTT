@@ -24,17 +24,20 @@ struct Puback: MQTTControlPacket {
     }
 
     init(bytes: Bytes) throws {
-        guard let type = MQTTControlPacketType(rawValue: bytes[0] >> 4) else {
-            throw MQTTError.DecodePacketError(message: "Invalid mqtt packet type")
+        let typeBytes = bytes[0] >> 4
+        guard let type = MQTTControlPacketType(rawValue: typeBytes) else {
+            // throw MQTTError.DecodePacketError(message: "Invalid mqtt packet type")
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidType(expected: .PUBACK, actual: typeBytes)))
         }
 
         if type != .PUBACK {
-            throw MQTTError.DecodePacketError(message: "Incorrect packet type, expected PUBACK, received: \(type.toString())")
+            // throw MQTTError.DecodePacketError(message: "Incorrect packet type, expected PUBACK, received: \(type.toString())")
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectType(expected: .PUBACK, actual: type)))
         }
 
         let flags = bytes[0] & 0b00001111
         if flags != 0 {
-            throw MQTTError.DecodePacketError(message: "Invalid flags")
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidFlags(expected: 0, actual: flags)))
         }
 
         let msgLen = bytes[1]
