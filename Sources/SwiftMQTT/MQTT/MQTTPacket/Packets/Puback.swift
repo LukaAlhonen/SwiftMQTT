@@ -10,7 +10,7 @@ struct PubackVarableHeader: Equatable {
     }
 
     func toString() -> String {
-        return "packetId: \(self.packetId)"
+        return "PacketId: \(self.packetId)"
     }
 }
 
@@ -26,12 +26,10 @@ struct Puback: MQTTControlPacket {
     init(bytes: Bytes) throws {
         let typeBytes = bytes[0] >> 4
         guard let type = MQTTControlPacketType(rawValue: typeBytes) else {
-            // throw MQTTError.DecodePacketError(message: "Invalid mqtt packet type")
             throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidType(expected: .PUBACK, actual: typeBytes)))
         }
 
         if type != .PUBACK {
-            // throw MQTTError.DecodePacketError(message: "Incorrect packet type, expected PUBACK, received: \(type.toString())")
             throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectType(expected: .PUBACK, actual: type)))
         }
 
