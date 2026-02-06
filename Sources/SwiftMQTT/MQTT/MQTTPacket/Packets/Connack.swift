@@ -1,3 +1,4 @@
+// TODO: replace with mqtt error
 enum DecodeConnackError: Error {
     case InvalidPacketType
     case InvalidRemainingLength
@@ -44,12 +45,12 @@ struct ConnackVariableHeader: Equatable {
     }
 
     func encode() -> Bytes {
-        var data: Bytes = []
+        var bytes: Bytes = []
 
-        data.append(self.sessionPresent)
-        data.append(self.connectReturnCode.rawValue)
+        bytes.append(self.sessionPresent)
+        bytes.append(self.connectReturnCode.rawValue)
 
-        return data
+        return bytes
     }
 }
 
@@ -57,36 +58,41 @@ struct Connack: MQTTControlPacket {
     var fixedHeader: FixedHeader
     var varHeader: ConnackVariableHeader
 
-    init(data: Bytes) throws {
-        let type: UInt8 = data[0] >> 4
+    init(bytes: Bytes) throws {
+        let type: UInt8 = bytes[0] >> 4
         if (type != MQTTControlPacketType.CONNACK.rawValue) {
             throw DecodeConnackError.InvalidPacketType
         }
 
-        if (data[1] != 2) {
+        if (bytes[1] != 2) {
             throw DecodeConnackError.InvalidRemainingLength
         }
 
         self.fixedHeader = FixedHeader(type: .CONNACK, flags: 0, remainingLength: 2)
 
-        if (data[2] != 0 && data[2] != 1) {
+        if (bytes[2] != 0 && bytes[2] != 1) {
             throw DecodeConnackError.InvalidFlags
         }
 
-        guard let connectionReturnCode = ConnectReturnCode(rawValue: data[3]) else {
+        guard let connectionReturnCode = ConnectReturnCode(rawValue: bytes[3]) else {
             throw DecodeConnackError.InvalidReturnCode
         }
 
-        self.varHeader = ConnackVariableHeader(sessionPresent: data[2], connectReturnCode: connectionReturnCode)
+        self.varHeader = ConnackVariableHeader(sessionPresent: bytes[2], connectReturnCode: connectionReturnCode)
+    }
+
+    init(returnCode: ConnectReturnCode, sessionPresent: Bool) {
+        self.fixedHeader = FixedHeader(type: .CONNACK, flags: 0, remainingLength: 2)
+        self.varHeader = ConnackVariableHeader(sessionPresent: sessionPresent ? 1 : 0, connectReturnCode: returnCode)
     }
 
     func encode() -> Bytes {
-        var data: Bytes = []
+        var bytes: Bytes = []
 
-        data.append(contentsOf: self.fixedHeader.encode())
-        data.append(contentsOf: self.varHeader.encode())
+        bytes.append(contentsOf: self.fixedHeader.encode())
+        bytes.append(contentsOf: self.varHeader.encode())
 
-        return data
+        return bytes
     }
 
     func toString() -> String {

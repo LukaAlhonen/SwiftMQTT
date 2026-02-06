@@ -6,7 +6,6 @@ import Logging
 struct SwiftMQTT {
     static func main() async {
         // set loglevel
-        // TODO: update client to take logger as input
         LoggingSystem.bootstrap { label in
             var handler = StreamLogHandler.standardOutput(label: label)
             handler.logLevel = .debug
@@ -16,14 +15,14 @@ struct SwiftMQTT {
         let host = "127.0.0.1"
         let port: Int = 1883
         let subscriber = MQTTClient(
+            clientId: "sub-1",
             host: host,
             port: port,
-            clientId: "sub-1",
-            config: .init(keepAlive: 5)
+            config: .init(keepAlive: 5, maxRetries: 10)
         )
 
         do {
-            try await subscriber.start()
+            try await subscriber.connect()
         } catch {
             Log.mqtt.error("Error connecting: \(error)")
         }
@@ -39,22 +38,19 @@ struct SwiftMQTT {
             Log.mqtt.error("Error subscribing: \(error)")
         }
 
-        do {
-            for try await packet in subscriber.packetStream {
-                switch packet {
-                    case .publish(let publish):
-                        // Log.mqtt.info("PUBLISH: \(publish.payload.toString()), on topic \(publish.varHeader.topicName)")
-                        Log.mqtt.info(.init(stringLiteral: publish.toString()))
-                    case .pingresp(let pingresp):
-                        Log.mqtt.debug(.init(stringLiteral: pingresp.toString()))
-                    case .connack(let connack):
-                        Log.mqtt.debug(.init(stringLiteral: connack.toString()))
-                    default:
-                        Log.mqtt.debug("Received: \(packet)")
-                }
+        for try await event in subscriber.eventStream {
+            switch event {
+                case .received(let packet):
+                    Log.mqtt.debug("Received: \(packet.inner().toString())")
+                case .error(let error):
+                    Log.mqtt.error("Error: \(error)")
+                case .warning(let warning):
+                    Log.mqtt.warning("Warning: \(warning)")
+                case .info(let message):
+                    Log.mqtt.info(.init(stringLiteral: message))
+                case .send(let packet):
+                    Log.mqtt.debug("Sent: \(packet.toString())")
             }
-        } catch {
-            Log.mqtt.error("Error: \(error)")
         }
     }
 }

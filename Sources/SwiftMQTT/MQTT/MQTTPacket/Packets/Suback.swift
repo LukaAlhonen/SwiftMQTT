@@ -25,11 +25,15 @@ struct SubackPayload: Equatable {
         var codes: [SubackReturnCode] = []
         for byte in bytes {
             guard let code = SubackReturnCode(rawValue: byte) else {
-                throw MQTTError.DecodePacketError(message: "Invalid return code: \(byte)")
+                throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidReturnCode))
             }
             codes.append(code)
         }
         self.returnCodes = codes
+    }
+
+    init(returnCodes: [SubackReturnCode]) {
+        self.returnCodes = returnCodes
     }
 
     func encode() -> Bytes {
@@ -64,18 +68,25 @@ struct Suback: MQTTControlPacket {
     var varHeader: SubackVariableHeader
     var payload: SubackPayload
 
-    init(data: Bytes) throws {
-        let packetType = data[0] >> 4
-        if (packetType != MQTTControlPacketType.SUBACK.rawValue) {
-            throw MQTTError.DecodePacketError(message: "Invalid packet type: \(packetType)")
+    init(bytes: Bytes) throws {
+        let typeBytes = bytes[0] >> 4
+        guard let type = MQTTControlPacketType(rawValue: typeBytes) else {
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidType(expected: .SUBACK, actual: typeBytes)))
         }
 
-        // payload len is msglen - 2
-        // let msglen = data[1]
+        if type != .SUBACK {
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectType(expected: .SUBACK, actual: type)))
+        }
 
-        let packetId = (UInt16(data[2]) << 8) | UInt16(data[3])
+        let packetId = (UInt16(bytes[2]) << 8) | UInt16(bytes[3])
         self.varHeader = SubackVariableHeader(packetId: packetId)
-        self.payload = try SubackPayload(bytes: Bytes(data[4..<data.count]))
+        self.payload = try SubackPayload(bytes: Bytes(bytes[4..<bytes.count]))
+        self.fixedHeader = FixedHeader(type: type, flags: 0, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
+    }
+
+    init(packetId: UInt16, returnCodes: [SubackReturnCode]) {
+        self.varHeader = SubackVariableHeader(packetId: packetId)
+        self.payload = SubackPayload(returnCodes: returnCodes)
         self.fixedHeader = FixedHeader(type: .SUBACK, flags: 0, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
     }
 

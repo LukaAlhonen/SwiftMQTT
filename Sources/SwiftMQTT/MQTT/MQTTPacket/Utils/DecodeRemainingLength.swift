@@ -14,7 +14,7 @@ func decodeRemainigLength(_ data: Bytes) throws -> (value: UInt, length: Int) {
         index += 1
 
         if (multiplier > 128*128*128*128) {
-            throw MQTTError.DecodePacketError(message: "Malformed remaining length")
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidRemainingLenght))
         }
     } while ((encodedByte & 128) != 0)
 

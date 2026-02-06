@@ -49,11 +49,11 @@ struct PacketParser {
         guard let bytes = buffer.getBytes(at: 0, length: buffer.readableBytes) else { return nil }
         // Connack
         if (bytes.starts(with: [0x20])) {
-            let connack = try Connack(data: bytes)
+            let connack = try Connack(bytes: bytes)
             return .connack(connack)
         // Suback
         } else if (bytes.starts(with: [0x90])) {
-            let suback = try Suback(data: bytes)
+            let suback = try Suback(bytes: bytes)
             return .suback(suback)
         // Pingresp
         } else if (bytes.starts(with: [0xd0])) {
@@ -79,6 +79,10 @@ struct PacketParser {
         } else if (bytes.starts(with: [0x50])) {
             let pubrec = try Pubrec(bytes: bytes)
             return .pubrec(pubrec)
+        // Unsuback
+        } else if (bytes.starts(with: [0xb0])) {
+            let unsuback = try Unsuback(bytes: bytes)
+            return .unsuback(unsuback)
         } else {
             return nil
         }
