@@ -14,18 +14,22 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build
-        run: swift build -v
-  test:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
+      - name: Install Swiftly
+        run: |
+          curl -O https://download.swift.org/swiftly/darwin/swiftly.pkg
+          sudo installer -pkg swiftly.pkg -target /
+          ~/.swiftly/bin/swiftly install 6.2
+          . "$HOME/.swiftly/env.sh"
+      - name: Check Swift version
+        run: swift --version
       - name: Install mosquitto
         run: brew install mosquitto
       - name: Run mosquitto
         run: |
           mosquitto -p 1883 &
           echo $! > mosquitto.pid
+      - name: Build
+        run: swift build -v
       - name: Run Tests
         run: swift test -v
       - name: Kill broker
