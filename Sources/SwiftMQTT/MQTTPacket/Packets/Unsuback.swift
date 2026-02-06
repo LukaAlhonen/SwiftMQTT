@@ -1,29 +1,29 @@
-struct UnsubackVariableHeader: Equatable {
-    let packetId: UInt16
+public struct UnsubackVariableHeader: Equatable, Sendable {
+    public let packetId: UInt16
 
-    init(packetId: UInt16) {
+    public init(packetId: UInt16) {
         self.packetId = packetId
     }
 
-    func encode() -> Bytes {
+    public func encode() -> Bytes {
         return encodeUInt16(self.packetId)
     }
 
-    func toString() -> String {
+    public func toString() -> String {
         return "PacketId: \(self.packetId)"
     }
 }
 
-struct Unsuback: MQTTControlPacket {
-    var fixedHeader: FixedHeader
-    var varHeader: UnsubackVariableHeader
+public struct Unsuback: MQTTControlPacket {
+    public var fixedHeader: FixedHeader
+    public var varHeader: UnsubackVariableHeader
 
-    init(packetId: UInt16) {
+    public init(packetId: UInt16) {
         self.varHeader = .init(packetId: packetId)
         self.fixedHeader = .init(type: .UNSUBACK, flags: 0, remainingLength: 2)
     }
 
-    init(bytes: Bytes) throws {
+    public init(bytes: Bytes) throws {
         let typeBytes = bytes[0] >> 4
         guard let type = MQTTControlPacketType(rawValue: typeBytes) else {
             throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidType(expected: .UNSUBACK, actual: typeBytes)))
@@ -47,7 +47,7 @@ struct Unsuback: MQTTControlPacket {
         self.varHeader = .init(packetId: packetId)
     }
 
-    func encode() -> Bytes {
+    public func encode() -> Bytes {
         var bytes: Bytes = []
         bytes.append(contentsOf: self.fixedHeader.encode())
         bytes.append(contentsOf: self.varHeader.encode())
@@ -55,7 +55,7 @@ struct Unsuback: MQTTControlPacket {
         return bytes
     }
 
-    func toString() -> String {
+    public func toString() -> String {
         return "\(self.fixedHeader.toString()), \(self.varHeader.toString())"
     }
 }

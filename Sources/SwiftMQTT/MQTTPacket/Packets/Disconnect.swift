@@ -1,15 +1,15 @@
-struct Disconnect: MQTTControlPacket {
-    var fixedHeader: FixedHeader
+public struct Disconnect: MQTTControlPacket {
+    public var fixedHeader: FixedHeader
 
-    init() {
+    public init() {
         self.fixedHeader = .init(type: .DISCONNECT, flags: 0, remainingLength: 0)
     }
 
-    func encode() -> Bytes {
+    public func encode() -> Bytes {
         return self.fixedHeader.encode()
     }
 
-    func toString() -> String {
+    public func toString() -> String {
         return self.fixedHeader.toString()
     }
 }

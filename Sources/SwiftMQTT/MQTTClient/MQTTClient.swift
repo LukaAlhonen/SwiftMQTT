@@ -1,4 +1,4 @@
-actor MQTTClient {
+public actor MQTTClient {
     private let config: Config
     private let clientId: String
 
@@ -8,7 +8,7 @@ actor MQTTClient {
 
     private let internalEventStream: AsyncStream<MQTTInternalEvent>
     private let internalCommandStream: AsyncStream<MQTTInternalCommand>
-    let eventStream: AsyncStream<MQTTEvent>
+    public let eventStream: AsyncStream<MQTTEvent>
 
 
     private let session: MQTTSession
@@ -17,7 +17,7 @@ actor MQTTClient {
 
     private var keepAliveTask: Task<Void, Never>?
 
-    init(clientId: String, host: String, port: Int, config: Config) {
+    public init(clientId: String, host: String, port: Int, config: Config) {
         self.clientId = clientId
         self.config = config
 
@@ -62,7 +62,7 @@ actor MQTTClient {
     }
 }
 
-extension MQTTClient {
+public extension MQTTClient {
     func connect() async throws {
         try await self.connectLoop()
         self.startKeepAlive()
@@ -105,7 +105,7 @@ extension MQTTClient {
 }
 
 // MARK: Publish
-extension MQTTClient {
+public extension MQTTClient {
     @discardableResult func publish(bytes: Bytes, qos: QoS, topic: String) async throws -> Publish{
         let publish = switch qos {
             case .ExactlyOnce:
@@ -178,7 +178,7 @@ extension MQTTClient {
 }
 
 // MARK: Subscribe
-extension MQTTClient {
+public extension MQTTClient {
     @discardableResult func subscribe(to topics: [TopicFilter]) async throws -> Subscribe {
         let packetId = await self.idAllocator.next()
         let subscribePacket = Subscribe(packetId: packetId, topics: topics)

@@ -1,4 +1,4 @@
-struct PubcompVariableHeader: Equatable {
+public struct PubcompVariableHeader: Equatable, Sendable {
     let packetId: UInt16
 
     init(packetId: UInt16) {
@@ -14,10 +14,12 @@ struct PubcompVariableHeader: Equatable {
     }
 }
 
-struct Pubcomp: MQTTControlPacket {
-    var fixedHeader: FixedHeader
-    var varHeader: PubcompVariableHeader
+public struct Pubcomp: MQTTControlPacket {
+    public var fixedHeader: FixedHeader
+    public var varHeader: PubcompVariableHeader
+}
 
+public extension Pubcomp {
     init(packetId: UInt16) {
         self.fixedHeader = .init(type: .PUBCOMP, flags: 0, remainingLength: 2)
         self.varHeader = .init(packetId: packetId)
@@ -48,7 +50,9 @@ struct Pubcomp: MQTTControlPacket {
         self.fixedHeader = .init(type: type, flags: flags, remainingLength: UInt(msgLen))
         self.varHeader = .init(packetId: packetId)
     }
+}
 
+public extension Pubcomp {
     func encode() -> Bytes {
         var bytes: Bytes = []
         bytes.append(contentsOf: self.fixedHeader.encode())

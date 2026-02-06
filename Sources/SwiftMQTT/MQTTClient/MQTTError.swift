@@ -26,6 +26,7 @@ enum MalformedPacketReason: Error, Equatable {
     case incorrectType(expected: MQTTControlPacketType, actual: MQTTControlPacketType)
     case invalidFlags(expected: UInt8, actual: UInt8)
     case invalidReturnCode
+    case reservedBitModified
 }
 
 enum TimeoutKind: Error, Equatable {

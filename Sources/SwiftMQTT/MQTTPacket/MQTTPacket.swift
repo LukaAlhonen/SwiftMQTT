@@ -1,4 +1,4 @@
-enum MQTTPacket: Equatable {
+public enum MQTTPacket: Equatable, Sendable {
     case connack(Connack)
     case connect(Connect)
     case disconnect(Disconnect)
@@ -14,7 +14,7 @@ enum MQTTPacket: Equatable {
     case unsuback(Unsuback)
     case unsubscribe(Unsubscribe)
 
-    func inner() -> any MQTTControlPacket {
+    public func inner() -> any MQTTControlPacket {
         switch self {
             case .connack(let connack):
                 return connack

@@ -1,12 +1,4 @@
-// TODO: replace with mqtt error
-enum DecodeConnackError: Error {
-    case InvalidPacketType
-    case InvalidRemainingLength
-    case InvalidFlags
-    case InvalidReturnCode
-}
-
-enum ConnectReturnCode: UInt8 {
+public enum ConnectReturnCode: UInt8, Sendable {
     case ConnectionAccepted = 0
     case UnnacceptableProtocolVersion = 1
     case IdentifierRejected = 2
@@ -15,7 +7,7 @@ enum ConnectReturnCode: UInt8 {
     case Unauthorized = 5
     case Reserved
 
-    func toString() -> String {
+    public func toString() -> String {
         switch self {
             case .ConnectionAccepted:
                 return "CONNECTION ACCEPTED"
@@ -35,9 +27,9 @@ enum ConnectReturnCode: UInt8 {
     }
 }
 
-struct ConnackVariableHeader: Equatable {
-    var sessionPresent: UInt8
-    var connectReturnCode: ConnectReturnCode
+public struct ConnackVariableHeader: Equatable, Sendable {
+    let sessionPresent: UInt8
+    let connectReturnCode: ConnectReturnCode
 
     init(sessionPresent: UInt8, connectReturnCode: ConnectReturnCode) {
         self.sessionPresent = sessionPresent
@@ -54,28 +46,42 @@ struct ConnackVariableHeader: Equatable {
     }
 }
 
-struct Connack: MQTTControlPacket {
-    var fixedHeader: FixedHeader
-    var varHeader: ConnackVariableHeader
+public struct Connack: MQTTControlPacket {
+    public var fixedHeader: FixedHeader
+    public var varHeader: ConnackVariableHeader
 
+}
+
+// MARK: Init
+public extension Connack {
+    // TODO: parse flags
     init(bytes: Bytes) throws {
-        let type: UInt8 = bytes[0] >> 4
-        if (type != MQTTControlPacketType.CONNACK.rawValue) {
-            throw DecodeConnackError.InvalidPacketType
+        let typeBits: Byte = bytes[0] >> 4
+        guard let type = MQTTControlPacketType(rawValue: typeBits) else {
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidType(expected: .CONNACK, actual: typeBits)))
+        }
+
+        if type != .CONNACK {
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectType(expected: .CONNACK, actual: type)))
+        }
+
+        let flags = bytes[0] & 0b00001111
+        if flags != 0 {
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidFlags(expected: 0, actual: flags)))
         }
 
         if (bytes[1] != 2) {
-            throw DecodeConnackError.InvalidRemainingLength
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidRemainingLenght))
         }
 
-        self.fixedHeader = FixedHeader(type: .CONNACK, flags: 0, remainingLength: 2)
+        self.fixedHeader = FixedHeader(type: .CONNACK, flags: flags, remainingLength: 2)
 
         if (bytes[2] != 0 && bytes[2] != 1) {
-            throw DecodeConnackError.InvalidFlags
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .reservedBitModified))
         }
 
         guard let connectionReturnCode = ConnectReturnCode(rawValue: bytes[3]) else {
-            throw DecodeConnackError.InvalidReturnCode
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidReturnCode))
         }
 
         self.varHeader = ConnackVariableHeader(sessionPresent: bytes[2], connectReturnCode: connectionReturnCode)
@@ -85,7 +91,10 @@ struct Connack: MQTTControlPacket {
         self.fixedHeader = FixedHeader(type: .CONNACK, flags: 0, remainingLength: 2)
         self.varHeader = ConnackVariableHeader(sessionPresent: sessionPresent ? 1 : 0, connectReturnCode: returnCode)
     }
+}
 
+// MARK: Utils
+public extension Connack {
     func encode() -> Bytes {
         var bytes: Bytes = []
 

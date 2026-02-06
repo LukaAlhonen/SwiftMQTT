@@ -1,4 +1,4 @@
-struct FixedHeader: Equatable {
+public struct FixedHeader: Equatable, Sendable {
     var type: MQTTControlPacketType
     var flags: UInt8
     var remainingLength: UInt
@@ -17,7 +17,7 @@ struct FixedHeader: Equatable {
     }
 }
 
-enum MQTTControlPacketType: UInt8 {
+public enum MQTTControlPacketType: UInt8, Sendable {
     case CONNECT = 1
     case CONNACK = 2
     case PUBLISH = 3

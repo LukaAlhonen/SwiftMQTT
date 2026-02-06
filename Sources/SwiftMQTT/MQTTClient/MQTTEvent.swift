@@ -1,4 +1,4 @@
-enum MQTTEvent: Sendable {
+public enum MQTTEvent: Sendable {
     case received(MQTTPacket)
     case error(any Error)
     case warning(String)

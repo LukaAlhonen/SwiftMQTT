@@ -10,7 +10,7 @@ actor MQTTConnection {
 
     private let eventBus: MQTTEventBus<MQTTInternalEvent>
 
-    init(host: String, port: Int, eventBus: MQTTEventBus<MQTTInternalEvent>) {
+    public init(host: String, port: Int, eventBus: MQTTEventBus<MQTTInternalEvent>) {
         if port <= 0 { fatalError("Invalid port number: \(port)")}
 
         self.host = host
