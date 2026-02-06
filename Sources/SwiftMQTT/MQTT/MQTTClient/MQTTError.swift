@@ -31,6 +31,7 @@ enum MalformedPacketReason: Error, Equatable {
 enum TimeoutKind: Error, Equatable {
     case connect
     case subscribe(packetId: UInt16)
+    case unsub(packetId: UInt16)
     case publish(packetId: UInt16, qos: QoS)
     case ping
 }

@@ -1,22 +1,5 @@
 import Foundation
 
-enum PublishQoS1State {
-    case publishSent
-    case pubAckReceived
-}
-
-enum PublishQoS2State {
-    case publishSent
-    case pubRecReceived
-    case pubRelSent
-    case pubCompReceived
-}
-
-enum SubscribeState {
-    case SubscribeSent
-    case Done
-}
-
 actor MQTTSession {
     private let config: Config
     private let eventBus: MQTTEventBus<MQTTEvent>
@@ -80,6 +63,8 @@ actor MQTTSession {
                 self.handleSuback(suback)
             case .pingresp(let pingresp):
                 self.handlePingresp(pingresp)
+            case .unsuback(let unsuback):
+                self.handleUnsuback(unsuback)
             default:
                 self.commandBus.emit(.disconnect(MQTTError.protocolViolation(.unexpectedPacket(packet: packet.inner().fixedHeader.type))))
                 return
@@ -116,6 +101,9 @@ actor MQTTSession {
             case .PINGREQ:
                 guard let pingreq = packet as? Pingreq else { return }
                 self.handleSendPingreq(pingreq)
+            case .UNSUBSCRIBE:
+                guard let unsubscribe = packet as? Unsubscribe else { return }
+                self.handleSendUnsubscribe(unsubscribe)
             default:
                 break
         }
@@ -202,6 +190,14 @@ extension MQTTSession {
         let timeoutTask = TimeoutTask(timeout: self.config.pingTimeout, kind: .ping)
         timeoutTask.start()
         self.pingrespTask = timeoutTask
+    }
+
+    private func handleSendUnsubscribe(_ unsub: Unsubscribe) {
+        let packetId = unsub.varHeader.packetId
+        // TODO: define duration in config
+        let timeoutTask = TimeoutTask(timeout: 10, kind: .unsub(packetId: packetId))
+        timeoutTask.start()
+        self.activeTasks[packetId] = InflightTask(state: .unsubscribe(.unsubSent), timeout: timeoutTask)
     }
 }
 
@@ -303,6 +299,16 @@ extension MQTTSession {
 
         inflighTask.timeout?.stop()
     }
+
+    private func handleUnsuback(_ unsuback: Unsuback) {
+        let packetId = unsuback.varHeader.packetId
+        guard let inflightTask = self.activeTasks.removeValue(forKey: packetId) else {
+            self.commandBus.emit(.disconnect(MQTTError.protocolViolation(.unexpectedPacket(packet: .UNSUBACK))))
+            return
+        }
+
+        inflightTask.timeout?.stop()
+    }
 }
 
 // MARK: Await functions
@@ -347,7 +353,22 @@ extension MQTTSession {
                     .invalidState(expected: "\(InflightState.subscribe(.SubscribeSent))", acutal: "\(subackTask.state)")
                 )
         }
+    }
 
+    func awaitUnsuback(packetId: UInt16) async throws {
+        guard let unsubackTask = self.activeTasks[packetId] else {
+            throw MQTTError.unexpectedError("Unsuback task for packetId \(packetId) should not be nil")
+        }
+
+        switch unsubackTask.state {
+            case .unsubscribe(.unsubSent):
+                try await unsubackTask.timeout?.wait()
+            default:
+                // TODO: perhaps change string to inflightstate
+                throw MQTTError.protocolViolation(
+                    .invalidState(expected: "\(InflightState.unsubscribe(.unsubSent))", acutal: "\(unsubackTask.state)")
+                )
+        }
     }
 
     func awaitPuback(packetId: UInt16) async throws {

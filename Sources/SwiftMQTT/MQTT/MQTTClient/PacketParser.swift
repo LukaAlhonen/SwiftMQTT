@@ -79,6 +79,10 @@ struct PacketParser {
         } else if (bytes.starts(with: [0x50])) {
             let pubrec = try Pubrec(bytes: bytes)
             return .pubrec(pubrec)
+        // Unsuback
+        } else if (bytes.starts(with: [0xb0])) {
+            let unsuback = try Unsuback(bytes: bytes)
+            return .unsuback(unsuback)
         } else {
             return nil
         }

@@ -207,7 +207,38 @@ import Testing
 }
 
 // MARK: Unsub
+@Test("Create unsub") func createUnsub() {
+    let unsub = Unsubscribe(packetId: 1, topics: ["a/b", "c/d"])
+    #expect(unsub.fixedHeader == FixedHeader(type: .UNSUBSCRIBE, flags: 2, remainingLength: 12))
+    #expect(unsub.varHeader == UnsubscribeVariableHeader(packetId: 1))
+    #expect(unsub.payload == UnsubscribePayload(topics: ["a/b", "c/d"]))
+}
+
+@Test("Encode unsub") func encodeUnsub() {
+    let unsub = Unsubscribe(packetId: 1, topics: ["a/b", "c/d"])
+    let bytes: Bytes = [0xa2, 0x0c, 0x00, 0x01, 0x00, 0x03, 0x61, 0x2f, 0x62, 0x00, 0x03, 0x63, 0x2f, 0x64]
+    #expect(unsub.encode() == bytes)
+}
+
 // MARK: Unsuback
+@Test("Create unsuback") func createUnsuback() {
+    let unsuback = Unsuback(packetId: 1)
+    #expect(unsuback.fixedHeader == FixedHeader(type: .UNSUBACK, flags: 0, remainingLength: 2))
+    #expect(unsuback.varHeader == UnsubackVariableHeader(packetId: 1))
+}
+
+@Test("Decode unsuback") func decodeUnsuback() {
+    let bytes: Bytes = [0xb0, 0x02, 0x00, 0x01]
+    let unsuback = try! Unsuback(bytes: bytes)
+    #expect(unsuback == Unsuback(packetId: 1))
+}
+
+@Test("Encode unsuback") func encodeUnsuback() {
+    let bytes: Bytes = [0xb0, 0x02, 0x00, 0x01]
+    let unsuback = Unsuback(packetId: 1)
+
+    #expect(unsuback.encode() == bytes)
+}
 
 // MARK: Pingreq
 @Test("Create pingreq") func createPingreq() {
