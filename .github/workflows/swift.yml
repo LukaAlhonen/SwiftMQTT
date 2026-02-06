@@ -18,8 +18,10 @@ jobs:
         run: |
           curl -O https://download.swift.org/swiftly/darwin/swiftly.pkg
           installer -pkg swiftly.pkg -target CurrentUserHomeDirectory
-          ~/.swiftly/bin/swiftly install 6.2.3
-          . "$HOME/.swiftly/env.sh"
+          ~/.swiftly/bin/swiftly init --quiet-shell-followup
+          . "${SWIFTLY_HOME_DIR:-$HOME/.swiftly}/env.sh"
+      - name: Install Swift 6.2.3 toolchain
+        run: switfly install --use 6.2.3
       - name: Check Swift version
         run: swift --version
       - name: Install mosquitto
