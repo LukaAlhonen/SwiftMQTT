@@ -17,8 +17,8 @@ jobs:
       - name: Install Swiftly
         run: |
           curl -O https://download.swift.org/swiftly/darwin/swiftly.pkg
-          sudo installer -pkg swiftly.pkg -target /
-          ~/.swiftly/bin/swiftly install 6.2
+          installer -pkg swiftly.pkg -target CurrentUserHomeDirectory
+          ~/.swiftly/bin/swiftly install 6.2.3
           . "$HOME/.swiftly/env.sh"
       - name: Check Swift version
         run: swift --version
