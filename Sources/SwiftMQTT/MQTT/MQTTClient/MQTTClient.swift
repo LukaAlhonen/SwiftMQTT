@@ -107,33 +107,74 @@ extension MQTTClient {
 
 // MARK: Publish
 extension MQTTClient {
-    func publish(bytes: Bytes, qos: QoS, topic: String) async throws {
-        let packetId = await idAllocator.next()
-        let publish = Publish(topicName: topic, message: bytes, packetId: packetId, qos: qos)
+    @discardableResult func publish(bytes: Bytes, qos: QoS, topic: String) async throws -> Publish{
+        let publish = switch qos {
+            case .ExactlyOnce:
+                await constructQoS2Publish(bytes: bytes, topic: topic)
+            case .AtLeastOnce:
+                await constructQoS1Publish(bytes: bytes, topic: topic)
+            case .AtMostOnce:
+                constructQoS0Publish(bytes: bytes, topic: topic)
+        }
 
-        try await sendPublish(publish)
+        try await self.sendPublish(publish, qos: qos)
 
+        return publish
+    }
+
+    @discardableResult func publish(message: String, qos: QoS, topic: String) async throws -> Publish{
+        let publish = switch qos {
+            case .ExactlyOnce:
+                await constructQoS2Publish(bytes: Bytes(message.utf8), topic: topic)
+            case .AtLeastOnce:
+                await constructQoS1Publish(bytes: Bytes(message.utf8), topic: topic)
+            case .AtMostOnce:
+                constructQoS0Publish(bytes: Bytes(message.utf8), topic: topic)
+        }
+
+        try await self.sendPublish(publish, qos: qos)
+
+        return publish
+    }
+
+    private func sendPublish(_ publish: Publish, qos: QoS) async throws {
+        try await self.send(publish)
         switch qos {
             case .ExactlyOnce:
+                guard let packetId = publish.varHeader.packetId else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))
+                }
                 try await self.session.awaitPubrec(packetId: packetId)
-                try await self.send(Pubrec(packetId: packetId))
+                try await self.send(Pubrel(packetId: packetId))
                 try await self.session.awaitPubComp(packetId: packetId)
             case .AtLeastOnce:
+                guard let packetId = publish.varHeader.packetId else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))
+                }
                 try await session.awaitPuback(packetId: packetId)
             case .AtMostOnce:
                 break
         }
     }
 
-    func publish(message: String, qos: QoS, topic: String) async throws {
-        let packetId = await idAllocator.next()
-        let publish = Publish(topicName: topic, message: message, packetId: packetId, qos: qos)
+    private func constructQoS2Publish(bytes: Bytes, topic: String) async -> Publish {
+        let packetId = await self.idAllocator.next()
+        let publish = Publish(topicName: topic, message: bytes, packetId: packetId, qos: .ExactlyOnce)
 
-        try await sendPublish(publish)
+        return publish
     }
 
-    private func sendPublish(_ publish: Publish) async throws {
-        try await self.send(publish)
+    private func constructQoS1Publish(bytes: Bytes, topic: String) async -> Publish {
+        let packetId = await self.idAllocator.next()
+        let publish = Publish(topicName: topic, message: bytes, packetId: packetId, qos: .AtLeastOnce)
+
+        return publish
+    }
+
+    private func constructQoS0Publish(bytes: Bytes, topic: String) -> Publish {
+        let publish = Publish(topicName: topic, message: bytes, qos: .AtMostOnce)
+
+        return publish
     }
 }
 

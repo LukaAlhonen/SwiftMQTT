@@ -32,6 +32,10 @@ struct SubackPayload: Equatable {
         self.returnCodes = codes
     }
 
+    init(returnCodes: [SubackReturnCode]) {
+        self.returnCodes = returnCodes
+    }
+
     func encode() -> Bytes {
         var bytes: Bytes = []
 
@@ -78,6 +82,12 @@ struct Suback: MQTTControlPacket {
         self.varHeader = SubackVariableHeader(packetId: packetId)
         self.payload = try SubackPayload(bytes: Bytes(bytes[4..<bytes.count]))
         self.fixedHeader = FixedHeader(type: type, flags: 0, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
+    }
+
+    init(packetId: UInt16, returnCodes: [SubackReturnCode]) {
+        self.varHeader = SubackVariableHeader(packetId: packetId)
+        self.payload = SubackPayload(returnCodes: returnCodes)
+        self.fixedHeader = FixedHeader(type: .SUBACK, flags: 0, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
     }
 
     func encode() -> Bytes {
