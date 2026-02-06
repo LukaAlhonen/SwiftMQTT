@@ -64,7 +64,6 @@ actor MQTTClient {
 
 extension MQTTClient {
     func connect() async throws {
-        // try await self.tryConnect()
         try await self.connectLoop()
         self.startKeepAlive()
     }
@@ -180,12 +179,13 @@ extension MQTTClient {
 
 // MARK: Subscribe
 extension MQTTClient {
-    func subscribe(to topics: [TopicFilter]) async throws {
-            let packetId = await self.idAllocator.next()
-            let subscribePacket = Subscribe(packetId: packetId, topics: topics)
+    @discardableResult func subscribe(to topics: [TopicFilter]) async throws -> Subscribe {
+        let packetId = await self.idAllocator.next()
+        let subscribePacket = Subscribe(packetId: packetId, topics: topics)
 
-            try await self.send(subscribePacket)
-            try await self.session.awaitSuback(packetId: packetId)
+        try await self.send(subscribePacket)
+        try await self.session.awaitSuback(packetId: packetId)
+        return subscribePacket
     }
 
     private func subscribeToTopics() async throws {
@@ -193,6 +193,19 @@ extension MQTTClient {
         if topics.count <= 0 { return }
 
         try await self.subscribe(to: topics)
+    }
+}
+
+// MARK: Unsub
+extension MQTTClient {
+    @discardableResult func unsubscribe(from topics: [String]) async throws -> Unsubscribe {
+        let packetId = await self.idAllocator.next()
+        let unsubpacket = Unsubscribe(packetId: packetId, topics: topics)
+
+        try await self.send(unsubpacket)
+        try await self.session.awaitUnsuback(packetId: packetId)
+
+        return unsubpacket
     }
 }
 
@@ -221,6 +234,7 @@ extension MQTTClient {
     }
 }
 
+// MARK: Disconnect
 extension MQTTClient {
     func stop() async {
         await self.disconnect()

@@ -2,6 +2,28 @@ enum InflightState {
     case publishQoS1(PublishQoS1State)
     case publishQoS2(PublishQoS2State)
     case subscribe(SubscribeState)
+    case unsubscribe(UnsubscribeState)
+}
+
+enum PublishQoS1State {
+    case publishSent
+    case pubAckReceived
+}
+
+enum PublishQoS2State {
+    case publishSent
+    case pubRecReceived
+    case pubRelSent
+    case pubCompReceived
+}
+
+enum SubscribeState {
+    case SubscribeSent
+    case Done
+}
+
+enum UnsubscribeState {
+    case unsubSent
 }
 
 struct InflightTask {
