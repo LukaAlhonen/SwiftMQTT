@@ -14,16 +14,9 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Swiftly
-        run: |
-          curl -O https://download.swift.org/swiftly/darwin/swiftly.pkg
-          installer -pkg swiftly.pkg -target CurrentUserHomeDirectory
-          ~/.swiftly/bin/swiftly init --quiet-shell-followup
-          . "${SWIFTLY_HOME_DIR:-$HOME/.swiftly}/env.sh"
-      - name: Install Swift 6.2.3 toolchain
-        run: ~/.swiftly/bin/swiftly install --use 6.2.3
-      - name: Check Swift version
-        run: swift --version
+      - uses: swift-actions/setup-swift@65540b95f51493d65f5e59e97dcef9629ddf11bf
+        with:
+          swift-version: 6.2.3
       - name: Install mosquitto
         run: brew install mosquitto
       - name: Run mosquitto
