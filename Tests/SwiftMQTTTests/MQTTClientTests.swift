@@ -38,6 +38,51 @@ import Testing
     #expect(packets[5] as? Pingresp == Pingresp())
 }
 
+@Test("Subscribe") func testSubscribe() async {
+    let client = MQTTClient(clientId: "test-subscriber", host: "localhost", port: 1883, config: .init())
+
+    let _ = try! await withTimeout(seconds: 1) {
+        try await client.connect()
+    }
+
+    let _ = try! await withTimeout(seconds: 1) {
+        try? await client.subscribe(to: [.init(topic: "test/subscribe", qos: .AtMostOnce)])
+    }
+
+    let task = Task {
+        var packets: [any MQTTControlPacket] = []
+        for await event in await client.eventStream {
+            switch event {
+                case .received(let packet):
+                    switch packet {
+                        case .suback(let suback):
+                            packets.append(suback)
+                            return packets
+                        default:
+                            break
+                    }
+                case .send(let packet):
+                    if packet.fixedHeader.type == .SUBSCRIBE {
+                        packets.append(packet)
+                    }
+                default:
+                    break
+            }
+        }
+
+        throw TestError.emptyPacketStream
+    }
+
+    let packets = try! await withTimeout(seconds: 10) {
+        try await task.value
+    }
+
+    await client.stop()
+
+    #expect(packets[0] as? Subscribe == Subscribe(packetId: 1, topics: [.init(topic: "test/subscribe", qos: .AtMostOnce)]))
+    #expect(packets[1] as? Suback == Suback(packetId: 1, returnCodes: [.QoS0]))
+}
+
 @Test("QoS 0 publish and subscribe") func qos0PubSub() async {
     let subscriber: MQTTClient = .init(clientId: "test-sub", host: "localhost", port: 1883, config: .init())
     let publisher: MQTTClient = .init(clientId: "test-pub", host: "localhost", port: 1883, config: .init())
