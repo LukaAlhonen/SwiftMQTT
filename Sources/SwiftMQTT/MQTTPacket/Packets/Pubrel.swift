@@ -1,23 +1,25 @@
-struct PubrelVariableHeader: Equatable {
-    let packetId: UInt16
+public struct PubrelVariableHeader: Equatable, Sendable {
+    public let packetId: UInt16
 
-    init(packetId: UInt16) {
+    public init(packetId: UInt16) {
         self.packetId = packetId
     }
 
-    func encode() -> Bytes {
+    public func encode() -> Bytes {
         return encodeUInt16(self.packetId)
     }
 
-    func toString() -> String {
+    public func toString() -> String {
         return "\(self.packetId)"
     }
 }
 
-struct Pubrel: MQTTControlPacket {
-    var fixedHeader: FixedHeader
-    var varHeader: PubrelVariableHeader
+public struct Pubrel: MQTTControlPacket {
+    public var fixedHeader: FixedHeader
+    public var varHeader: PubrelVariableHeader
+}
 
+public extension Pubrel {
     init(packetId: UInt16) {
         self.fixedHeader = .init(type: .PUBREL, flags: 2, remainingLength: 2)
         self.varHeader = .init(packetId: packetId)
@@ -45,7 +47,9 @@ struct Pubrel: MQTTControlPacket {
         self.fixedHeader = .init(type: type, flags: flags, remainingLength: 2)
         self.varHeader = .init(packetId: packetId)
     }
+}
 
+public extension Pubrel {
     func encode() -> Bytes {
         var bytes: Bytes = []
 

@@ -1,10 +1,10 @@
-enum SubackReturnCode: UInt8 {
+public enum SubackReturnCode: UInt8, Sendable {
     case QoS0 = 0x00
     case QoS1 = 0x01
     case QoS2 = 0x02
     case Rejected = 0x80
 
-    func toString() -> String {
+    public func toString() -> String {
         switch self {
             case .QoS0:
                 return "QoS 0"
@@ -18,10 +18,10 @@ enum SubackReturnCode: UInt8 {
     }
 }
 
-struct SubackPayload: Equatable {
-    let returnCodes: [SubackReturnCode]
+public struct SubackPayload: Equatable, Sendable {
+    public let returnCodes: [SubackReturnCode]
 
-    init(bytes: Bytes) throws {
+    public init(bytes: Bytes) throws {
         var codes: [SubackReturnCode] = []
         for byte in bytes {
             guard let code = SubackReturnCode(rawValue: byte) else {
@@ -32,11 +32,11 @@ struct SubackPayload: Equatable {
         self.returnCodes = codes
     }
 
-    init(returnCodes: [SubackReturnCode]) {
+    public init(returnCodes: [SubackReturnCode]) {
         self.returnCodes = returnCodes
     }
 
-    func encode() -> Bytes {
+    public func encode() -> Bytes {
         var bytes: Bytes = []
 
         for code in self.returnCodes {
@@ -46,28 +46,30 @@ struct SubackPayload: Equatable {
         return bytes
     }
 
-    func toString() -> String {
+    public func toString() -> String {
         return self.returnCodes.map { $0.toString() }.joined(separator: ", ")
     }
 }
 
-struct SubackVariableHeader: Equatable {
-    let packetId: UInt16
+public struct SubackVariableHeader: Equatable, Sendable {
+    public let packetId: UInt16
 
-    init(packetId: UInt16) {
+    public init(packetId: UInt16) {
         self.packetId = packetId
     }
 
-    func encode() -> Bytes {
+    public func encode() -> Bytes {
         return encodeUInt16(self.packetId)
     }
 }
 
-struct Suback: MQTTControlPacket {
-    var fixedHeader: FixedHeader
-    var varHeader: SubackVariableHeader
-    var payload: SubackPayload
+public struct Suback: MQTTControlPacket {
+    public var fixedHeader: FixedHeader
+    public var varHeader: SubackVariableHeader
+    public var payload: SubackPayload
+}
 
+public extension Suback {
     init(bytes: Bytes) throws {
         let typeBytes = bytes[0] >> 4
         guard let type = MQTTControlPacketType(rawValue: typeBytes) else {
@@ -78,10 +80,15 @@ struct Suback: MQTTControlPacket {
             throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectType(expected: .SUBACK, actual: type)))
         }
 
+        let flags = bytes[0] & 0b00001111
+        if flags != 0 {
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidFlags(expected: 0, actual: flags)))
+        }
+
         let packetId = (UInt16(bytes[2]) << 8) | UInt16(bytes[3])
         self.varHeader = SubackVariableHeader(packetId: packetId)
         self.payload = try SubackPayload(bytes: Bytes(bytes[4..<bytes.count]))
-        self.fixedHeader = FixedHeader(type: type, flags: 0, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
+        self.fixedHeader = FixedHeader(type: type, flags: flags, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
     }
 
     init(packetId: UInt16, returnCodes: [SubackReturnCode]) {
@@ -89,7 +96,9 @@ struct Suback: MQTTControlPacket {
         self.payload = SubackPayload(returnCodes: returnCodes)
         self.fixedHeader = FixedHeader(type: .SUBACK, flags: 0, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
     }
+}
 
+public extension Suback {
     func encode() -> Bytes {
         var bytes: Bytes = []
         bytes.append(contentsOf: self.fixedHeader.encode())

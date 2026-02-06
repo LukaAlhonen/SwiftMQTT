@@ -1,10 +1,8 @@
-import Foundation
+public struct PublishVarHeader: Equatable, Sendable {
+    public let topicName: String
+    public let packetId: UInt16?
 
-struct PublishVarHeader: Equatable {
-    let topicName: String
-    let packetId: UInt16?
-
-    init(topicName: Bytes, packetId: UInt16?) throws {
+    public init(topicName: Bytes, packetId: UInt16?) throws {
         guard let t = String(bytes: topicName, encoding: .utf8) else {
             throw MQTTError.unexpectedError("Unable to decode topic name")
         }
@@ -12,12 +10,12 @@ struct PublishVarHeader: Equatable {
         self.packetId = packetId
     }
 
-    init(topicName: String, packetId: UInt16?) {
+    public init(topicName: String, packetId: UInt16?) {
         self.topicName = topicName
         self.packetId = packetId
     }
 
-    func encode() -> Bytes {
+    public func encode() -> Bytes {
         var bytes: Bytes = []
 
         let topicNameBytes: Bytes = Bytes(self.topicName.utf8)
@@ -30,7 +28,7 @@ struct PublishVarHeader: Equatable {
         return bytes
     }
 
-    func toString() -> String {
+    public func toString() -> String {
         var str = "topicName: \(self.topicName)"
         if let packetId = self.packetId {
             str.append(contentsOf: ", packetId: \(packetId)")
@@ -40,18 +38,18 @@ struct PublishVarHeader: Equatable {
     }
 }
 
-struct PublishPayload: Equatable {
-    let content: Bytes
+public struct PublishPayload: Equatable, Sendable {
+    public let content: Bytes
 
-    init(content: Bytes) {
+    public init(content: Bytes) {
         self.content = content
     }
 
-    func encode() -> Bytes {
+    public func encode() -> Bytes {
         return self.content
     }
 
-    func toString() -> String {
+    public func toString() -> String {
         guard let str: String = String(bytes: self.content, encoding: .utf8) else {
             let hex = self.content.map { String(format: "%02X", $0) }.joined(separator: ", ")
             return "[\(hex)]"
@@ -61,15 +59,19 @@ struct PublishPayload: Equatable {
     }
 }
 
-struct Publish: MQTTControlPacket, Equatable {
-    var fixedHeader: FixedHeader
-    var varHeader: PublishVarHeader
-    var payload: PublishPayload
+public struct Publish: MQTTControlPacket, Equatable {
+    public var fixedHeader: FixedHeader
+    public var varHeader: PublishVarHeader
+    public var payload: PublishPayload
 
-    let dup: Bool
-    let qos: QoS
-    let retain: Bool
+    public let dup: Bool
+    public let qos: QoS
+    public let retain: Bool
 
+
+}
+
+public extension Publish {
     init(bytes: Bytes) throws {
         let typeBytes = bytes[0] >> 4
         guard let type = MQTTControlPacketType(rawValue: typeBytes) else {
@@ -149,7 +151,9 @@ struct Publish: MQTTControlPacket, Equatable {
         self.payload = .init(content: message)
         self.fixedHeader = .init(type: .PUBLISH, flags: flags, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
     }
+}
 
+public extension Publish {
     func encode() -> Bytes {
         var bytes: Bytes = []
         bytes.append(contentsOf: self.fixedHeader.encode())

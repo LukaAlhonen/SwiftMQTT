@@ -1,32 +1,36 @@
-struct TopicFilter: Hashable {
-    let topic: String
-    let qos: QoS
+public struct TopicFilter: Hashable, Sendable {
+    public let topic: String
+    public let qos: QoS
+    public init(topic: String, qos: QoS) {
+        self.topic = topic
+        self.qos = qos
+    }
 }
 
-struct SubscribeVariableHeader: Equatable {
-    var packetId: UInt16
+public struct SubscribeVariableHeader: Equatable, Sendable {
+    public var packetId: UInt16
 
-    init(packetId: UInt16) {
+    public init(packetId: UInt16) {
         self.packetId = packetId
     }
 
-    func encode() -> Bytes {
+    public func encode() -> Bytes {
         return encodeUInt16(self.packetId)
     }
 
-    func toString() -> String {
+    public func toString() -> String {
         return "packetId: \(self.packetId)"
     }
 }
 
-struct SubscribePayload: Equatable {
-    var topics: [TopicFilter]
+public struct SubscribePayload: Equatable, Sendable {
+    public let topics: [TopicFilter]
 
-    init(topics: [TopicFilter]) {
+    public init(topics: [TopicFilter]) {
         self.topics = topics
     }
 
-    func encode() -> Bytes {
+    public func encode() -> Bytes {
         var data: Bytes = []
 
         for topicFilter in self.topics {
@@ -38,24 +42,24 @@ struct SubscribePayload: Equatable {
         return data
     }
 
-    func toString() -> String {
+    public func toString() -> String {
         let s = self.topics.map { "topic: \($0.topic), QoS: \($0.qos)"}.joined(separator: ", ")
         return s
     }
 }
 
-struct Subscribe: MQTTControlPacket {
-    var fixedHeader: FixedHeader
-    var varHeader: SubscribeVariableHeader
-    var payload: SubscribePayload
+public struct Subscribe: MQTTControlPacket {
+    public var fixedHeader: FixedHeader
+    public var varHeader: SubscribeVariableHeader
+    public var payload: SubscribePayload
 
-    init(packetId: UInt16 = 1, topics: [TopicFilter]) {
+    public init(packetId: UInt16 = 1, topics: [TopicFilter]) {
         self.varHeader = SubscribeVariableHeader(packetId: packetId)
         self.payload = SubscribePayload(topics: topics)
         self.fixedHeader = FixedHeader(type: .SUBSCRIBE, flags: 0b0010, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
     }
 
-    func encode() -> Bytes {
+    public func encode() -> Bytes {
         var data: Bytes = []
         data.append(contentsOf: fixedHeader.encode())
         data.append(contentsOf: varHeader.encode())
@@ -64,7 +68,7 @@ struct Subscribe: MQTTControlPacket {
         return data
     }
 
-    func toString() -> String {
+    public func toString() -> String {
         return "SUBSCRIBE [\(self.varHeader.toString())] [\(self.payload.toString())]"
     }
 }

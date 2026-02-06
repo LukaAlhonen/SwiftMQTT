@@ -1,6 +1,6 @@
 import Foundation
 
-struct ConnConnectFlags: Equatable {
+public struct ConnConnectFlags: Equatable, Sendable {
     let username: Bool
     let password: Bool
     let willRetain: Bool
@@ -8,7 +8,7 @@ struct ConnConnectFlags: Equatable {
     let willFlag: Bool
     let cleanSession: Bool
 
-    init(
+    public init(
         auth: Auth? = nil,
         cleanSession: Bool = true,
         lwt: LWT? = nil
@@ -32,7 +32,7 @@ struct ConnConnectFlags: Equatable {
         }
     }
 
-    func encode() -> UInt8 {
+    public func encode() -> UInt8 {
         var flags: UInt8 = 0
 
         if self.username {
@@ -61,20 +61,20 @@ struct ConnConnectFlags: Equatable {
     }
 }
 
-struct ConnVariableHeader: Equatable {
-    var protocolName: String
-    var protocolLevel: UInt8
-    var connectFlags: ConnConnectFlags
-    var keepAlive: UInt16
+public struct ConnVariableHeader: Equatable, Sendable {
+    let protocolName: String
+    let protocolLevel: UInt8
+    let connectFlags: ConnConnectFlags
+    let keepAlive: UInt16
 
-    init(protocolName: String = "MQTT", protocolLevel: UInt8, connectFlags: ConnConnectFlags, keepAlive: UInt16) {
+    public init(protocolName: String = "MQTT", protocolLevel: UInt8, connectFlags: ConnConnectFlags, keepAlive: UInt16) {
         self.protocolName = protocolName
         self.protocolLevel = protocolLevel
         self.connectFlags = connectFlags
         self.keepAlive = keepAlive
     }
 
-    func encode() -> Bytes {
+    public func encode() -> Bytes {
         var data: Bytes = []
 
         data.append(contentsOf: encodeUInt16(UInt16(self.protocolName.count)))
@@ -87,12 +87,12 @@ struct ConnVariableHeader: Equatable {
     }
 }
 
-struct ConnPayload: Equatable {
-    var clientId: String
-    var willTopic: String?
-    var willMessage: Data?
-    var username: String?
-    var password: Data?
+public struct ConnPayload: Equatable, Sendable {
+    public let clientId: String
+    public var willTopic: String?
+    public var willMessage: Data?
+    public var username: String?
+    public var password: Data?
 
     init(clientId: String, lwt: LWT? = nil, auth: Auth? = nil) {
         self.clientId = clientId
@@ -136,12 +136,12 @@ struct ConnPayload: Equatable {
     }
 }
 
-struct Connect: MQTTControlPacket {
-    var fixedHeader: FixedHeader
-    var varHeader: ConnVariableHeader
-    var payload: ConnPayload
+public struct Connect: MQTTControlPacket {
+    public var fixedHeader: FixedHeader
+    public var varHeader: ConnVariableHeader
+    public var payload: ConnPayload
 
-    init(
+    public init(
         clientId: String,
         keepAlive: UInt16,
         lwt: LWT? = nil,
@@ -166,7 +166,7 @@ struct Connect: MQTTControlPacket {
             remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
     }
 
-    func encode() -> Bytes {
+    public func encode() -> Bytes {
         var data: Bytes = []
         data.append(contentsOf: self.fixedHeader.encode())
         data.append(contentsOf: self.varHeader.encode())
@@ -174,7 +174,7 @@ struct Connect: MQTTControlPacket {
         return data
     }
 
-    func toString() -> String {
+    public func toString() -> String {
         return self.fixedHeader.toString()
     }
 }

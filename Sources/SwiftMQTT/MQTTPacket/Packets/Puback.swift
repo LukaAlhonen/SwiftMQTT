@@ -1,4 +1,4 @@
-struct PubackVarableHeader: Equatable {
+public struct PubackVarableHeader: Equatable, Sendable {
     let packetId: UInt16
 
     init(packetId: UInt16) {
@@ -14,10 +14,12 @@ struct PubackVarableHeader: Equatable {
     }
 }
 
-struct Puback: MQTTControlPacket {
-    var fixedHeader: FixedHeader
-    var varHeader: PubackVarableHeader
+public struct Puback: MQTTControlPacket {
+    public var fixedHeader: FixedHeader
+    public var varHeader: PubackVarableHeader
+}
 
+public extension Puback {
     init(packetId: UInt16) {
         self.fixedHeader = .init(type: .PUBACK, flags: 0, remainingLength: 2)
         self.varHeader = .init(packetId: packetId)
@@ -46,7 +48,9 @@ struct Puback: MQTTControlPacket {
         self.fixedHeader = .init(type: type, flags: flags, remainingLength: UInt(msgLen))
         self.varHeader = .init(packetId: packetId)
     }
+}
 
+public extension Puback {
     func encode() -> Bytes {
         var bytes: Bytes = []
         bytes.append(contentsOf: self.fixedHeader.encode())
