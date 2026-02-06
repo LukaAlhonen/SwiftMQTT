@@ -21,7 +21,7 @@ jobs:
           ~/.swiftly/bin/swiftly init --quiet-shell-followup
           . "${SWIFTLY_HOME_DIR:-$HOME/.swiftly}/env.sh"
       - name: Install Swift 6.2.3 toolchain
-        run: swiftly install --use 6.2.3
+        run: ~/.swiftly/bin/swiftly install --use 6.2.3
       - name: Check Swift version
         run: swift --version
       - name: Install mosquitto
