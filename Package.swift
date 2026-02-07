@@ -11,6 +11,7 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log", from: "1.6.0"),
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.0.0"),
         .package(url: "https://github.com/apple/swift-nio-transport-services.git", from: "1.13.0"),
     ],
     targets: [
@@ -18,12 +19,17 @@ let package = Package(
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
             name: "SwiftMQTT",
-            dependencies: [.product(name: "NIOTransportServices", package: "swift-nio-transport-services")]
+            dependencies: [
+                .product(name: "NIOTransportServices", package: "swift-nio-transport-services"),
+                .product(name: "NIOCore", package: "swift-nio"),
+            ]
         ),
         .executableTarget(
             name: "SwiftMQTTCli",
-            dependencies: [.product(name: "Logging", package: "swift-log"), .target(name: "SwiftMQTT")],
+            dependencies: [
+                .product(name: "Logging", package: "swift-log"), .target(name: "SwiftMQTT"),
+            ],
         ),
-        .testTarget(name: "SwiftMQTTTests", dependencies: [.target(name: "SwiftMQTT")])
+        .testTarget(name: "SwiftMQTTTests", dependencies: [.target(name: "SwiftMQTT")]),
     ]
 )
