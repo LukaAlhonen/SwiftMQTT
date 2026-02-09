@@ -10,7 +10,7 @@ public struct PubrelVariableHeader: Equatable, Sendable {
     }
 
     public func toString() -> String {
-        return "\(self.packetId)"
+        return "Packet ID: \(self.packetId)"
     }
 }
 
@@ -19,25 +19,28 @@ public struct Pubrel: MQTTControlPacket {
     public var varHeader: PubrelVariableHeader
 }
 
-public extension Pubrel {
-    init(packetId: UInt16) {
+extension Pubrel {
+    public init(packetId: UInt16) {
         self.fixedHeader = .init(type: .PUBREL, flags: 2, remainingLength: 2)
         self.varHeader = .init(packetId: packetId)
     }
 
-    init(bytes: Bytes) throws {
+    public init(bytes: Bytes) throws {
         let typeBytes = bytes[0] >> 4
         guard let type = MQTTControlPacketType(rawValue: typeBytes) else {
-            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidType(expected: .PUBREL, actual: typeBytes)))
+            throw MQTTError.protocolViolation(
+                .malformedPacket(reason: .invalidType(expected: .PUBREL, actual: typeBytes)))
         }
 
         if type != .PUBREL {
-            throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectType(expected: .PUBREL, actual: type)))
+            throw MQTTError.protocolViolation(
+                .malformedPacket(reason: .incorrectType(expected: .PUBREL, actual: type)))
         }
 
         let flags = bytes[0] & 0b00001111
         if flags != 2 {
-            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidFlags(expected: 2, actual: flags)))
+            throw MQTTError.protocolViolation(
+                .malformedPacket(reason: .invalidFlags(expected: 2, actual: flags)))
         }
 
         let packetIdMSB = bytes[2]
@@ -49,8 +52,8 @@ public extension Pubrel {
     }
 }
 
-public extension Pubrel {
-    func encode() -> Bytes {
+extension Pubrel {
+    public func encode() -> Bytes {
         var bytes: Bytes = []
 
         bytes.append(contentsOf: self.fixedHeader.encode())
@@ -59,8 +62,7 @@ public extension Pubrel {
         return bytes
     }
 
-
-    func toString() -> String {
+    public func toString() -> String {
         return "\(self.fixedHeader.toString()), \(self.varHeader.toString())"
     }
 }

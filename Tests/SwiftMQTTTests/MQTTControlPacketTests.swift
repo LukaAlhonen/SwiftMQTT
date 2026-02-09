@@ -6,7 +6,9 @@ import Testing
 @Test("Create Connack Packet") func createConnackPacket() {
     let connack = Connack(returnCode: .ConnectionAccepted, sessionPresent: false)
     #expect(connack.fixedHeader == FixedHeader(type: .CONNACK, flags: 0, remainingLength: 2))
-    #expect(connack.varHeader == ConnackVariableHeader(sessionPresent: 0, connectReturnCode: .ConnectionAccepted))
+    #expect(
+        connack.varHeader
+            == ConnackVariableHeader(sessionPresent: 0, connectReturnCode: .ConnectionAccepted))
 }
 
 @Test("Decode Connack Packet") func decodeConnackPacket() {
@@ -60,7 +62,7 @@ import Testing
     #expect(publishPacket.varHeader.packetId == nil)
     #expect(publishPacket.varHeader.topicName == "test/topic")
     #expect(publishPacket.payload.content == [0x68, 0x65, 0x6c, 0x6c, 0x6f])
-    #expect(publishPacket.payload.toString() == "hello")
+    #expect(publishPacket.payload.toString() == "Payload: hello")
     #expect(publishPacket.qos == .AtMostOnce)
     #expect(publishPacket.dup == false)
     #expect(publishPacket.retain == false)
@@ -216,7 +218,9 @@ import Testing
 
 @Test("Encode unsub") func encodeUnsub() {
     let unsub = Unsubscribe(packetId: 1, topics: ["a/b", "c/d"])
-    let bytes: Bytes = [0xa2, 0x0c, 0x00, 0x01, 0x00, 0x03, 0x61, 0x2f, 0x62, 0x00, 0x03, 0x63, 0x2f, 0x64]
+    let bytes: Bytes = [
+        0xa2, 0x0c, 0x00, 0x01, 0x00, 0x03, 0x61, 0x2f, 0x62, 0x00, 0x03, 0x63, 0x2f, 0x64,
+    ]
     #expect(unsub.encode() == bytes)
 }
 

@@ -59,6 +59,11 @@ public struct ConnConnectFlags: Equatable, Sendable {
 
         return flags
     }
+
+    public func toString() -> String {
+        return
+            "Username flag: \(self.username), Password flag: \(self.password), WillRetain: \(self.willRetain), Will QoS: \(self.qos), Will flag: \(self.willFlag), Clean session: \(self.cleanSession)"
+    }
 }
 
 public struct ConnVariableHeader: Equatable, Sendable {
@@ -67,7 +72,10 @@ public struct ConnVariableHeader: Equatable, Sendable {
     let connectFlags: ConnConnectFlags
     let keepAlive: UInt16
 
-    public init(protocolName: String = "MQTT", protocolLevel: UInt8, connectFlags: ConnConnectFlags, keepAlive: UInt16) {
+    public init(
+        protocolName: String = "MQTT", protocolLevel: UInt8, connectFlags: ConnConnectFlags,
+        keepAlive: UInt16
+    ) {
         self.protocolName = protocolName
         self.protocolLevel = protocolLevel
         self.connectFlags = connectFlags
@@ -85,6 +93,11 @@ public struct ConnVariableHeader: Equatable, Sendable {
 
         return data
     }
+
+    public func toString() -> String {
+        return
+            "Protocol name: \(self.protocolName), Protocol level: \(self.protocolLevel), Connect flags: \(self.connectFlags.toString()), Keepalive: \(self.keepAlive)"
+    }
 }
 
 public struct ConnPayload: Equatable, Sendable {
@@ -94,7 +107,7 @@ public struct ConnPayload: Equatable, Sendable {
     public var username: String?
     public var password: Data?
 
-    init(clientId: String, lwt: LWT? = nil, auth: Auth? = nil) {
+    public init(clientId: String, lwt: LWT? = nil, auth: Auth? = nil) {
         self.clientId = clientId
         if let lwt = lwt {
             self.willTopic = lwt.topic
@@ -106,7 +119,7 @@ public struct ConnPayload: Equatable, Sendable {
         }
     }
 
-    func encode() -> Bytes {
+    public func encode() -> Bytes {
         var data: Bytes = []
 
         data.append(contentsOf: encodeUInt16(UInt16(self.clientId.count)))
@@ -133,6 +146,13 @@ public struct ConnPayload: Equatable, Sendable {
         }
 
         return data
+    }
+
+    public func toString() -> String {
+        let topicString = self.willTopic ?? ""
+        let messageString = self.willMessage?.base64EncodedString() ?? ""
+        return
+            "ClientId: \(self.clientId), Will topic: \(topicString), Will message: \(messageString)"
     }
 }
 
@@ -175,6 +195,7 @@ public struct Connect: MQTTControlPacket {
     }
 
     public func toString() -> String {
-        return self.fixedHeader.toString()
+        return
+            "\(self.fixedHeader.toString()), \(self.varHeader.toString()), \(self.payload.toString())"
     }
 }

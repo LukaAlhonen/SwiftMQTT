@@ -29,9 +29,9 @@ public struct PublishVarHeader: Equatable, Sendable {
     }
 
     public func toString() -> String {
-        var str = "topicName: \(self.topicName)"
+        var str = "Topic: \(self.topicName)"
         if let packetId = self.packetId {
-            str.append(contentsOf: ", packetId: \(packetId)")
+            str.append(contentsOf: ", Packet ID: \(packetId)")
         }
 
         return str
@@ -55,7 +55,7 @@ public struct PublishPayload: Equatable, Sendable {
             return "[\(hex)]"
         }
 
-        return str
+        return "Payload: \(str)"
     }
 }
 
@@ -68,14 +68,14 @@ public struct Publish: MQTTControlPacket, Equatable {
     public let qos: QoS
     public let retain: Bool
 
-
 }
 
-public extension Publish {
-    init(bytes: Bytes) throws {
+extension Publish {
+    public init(bytes: Bytes) throws {
         let typeBytes = bytes[0] >> 4
         guard let type = MQTTControlPacketType(rawValue: typeBytes) else {
-            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidType(expected: .PUBLISH, actual: typeBytes)))
+            throw MQTTError.protocolViolation(
+                .malformedPacket(reason: .invalidType(expected: .PUBLISH, actual: typeBytes)))
         }
 
         let flags = bytes[0] & 0b00001111
@@ -94,25 +94,29 @@ public extension Publish {
         self.fixedHeader = FixedHeader(type: type, flags: flags, remainingLength: msgLen.value)
 
         // VarHeader
-        let remaining = Bytes(bytes[msgLen.length+1..<bytes.count])
+        let remaining = Bytes(bytes[msgLen.length + 1..<bytes.count])
         let topicLenMSB = remaining[0]
         let topicLenLSB = remaining[1]
         let topicLen = (UInt16(topicLenMSB) << 8) | UInt16(topicLenLSB)
-        let topicBytes = Bytes(remaining[2..<2+Int(topicLen)])
+        let topicBytes = Bytes(remaining[2..<2 + Int(topicLen)])
         // PacketId only included if QoS > 0
         var packetId: UInt16? = nil
         if qos.rawValue > 0 {
-            let packetIdMSB = remaining[2+Int(topicLen)]
-            let packetIdLSB = remaining[3+Int(topicLen)]
+            let packetIdMSB = remaining[2 + Int(topicLen)]
+            let packetIdLSB = remaining[3 + Int(topicLen)]
             packetId = (UInt16(packetIdMSB) << 8) | UInt16(packetIdLSB)
         }
 
         self.varHeader = try PublishVarHeader(topicName: topicBytes, packetId: packetId)
         // Payload
-        self.payload = PublishPayload(content: Bytes(remaining[self.varHeader.encode().count..<remaining.count]))
+        self.payload = PublishPayload(
+            content: Bytes(remaining[self.varHeader.encode().count..<remaining.count]))
     }
 
-    init(topicName: String, message: String, packetId: UInt16? = nil, duplicate: Bool = false, qos: QoS, retain: Bool = false) {
+    public init(
+        topicName: String, message: String, packetId: UInt16? = nil, duplicate: Bool = false,
+        qos: QoS, retain: Bool = false
+    ) {
         self.dup = duplicate
         self.qos = qos
         self.retain = retain
@@ -129,10 +133,15 @@ public extension Publish {
 
         self.varHeader = .init(topicName: topicName, packetId: packetId)
         self.payload = .init(content: Bytes(message.utf8))
-        self.fixedHeader = .init(type: .PUBLISH, flags: flags, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
+        self.fixedHeader = .init(
+            type: .PUBLISH, flags: flags,
+            remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
     }
 
-    init(topicName: String, message: Bytes, packetId: UInt16? = nil, duplicate: Bool = false, qos: QoS, retain: Bool = false) {
+    public init(
+        topicName: String, message: Bytes, packetId: UInt16? = nil, duplicate: Bool = false,
+        qos: QoS, retain: Bool = false
+    ) {
         self.dup = duplicate
         self.qos = qos
         self.retain = retain
@@ -149,12 +158,14 @@ public extension Publish {
 
         self.varHeader = .init(topicName: topicName, packetId: packetId)
         self.payload = .init(content: message)
-        self.fixedHeader = .init(type: .PUBLISH, flags: flags, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
+        self.fixedHeader = .init(
+            type: .PUBLISH, flags: flags,
+            remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
     }
 }
 
-public extension Publish {
-    func encode() -> Bytes {
+extension Publish {
+    public func encode() -> Bytes {
         var bytes: Bytes = []
         bytes.append(contentsOf: self.fixedHeader.encode())
         bytes.append(contentsOf: self.varHeader.encode())
@@ -163,8 +174,8 @@ public extension Publish {
         return bytes
     }
 
-
-    func toString() -> String {
-        return "\(self.fixedHeader.toString()): dup: \(self.dup), qos: \(self.qos), retain: \(self.retain), \(self.varHeader.toString()), \(self.payload.toString())"
+    public func toString() -> String {
+        return
+            "\(self.fixedHeader.toString()): dup: \(self.dup), qos: \(self.qos), retain: \(self.retain), \(self.varHeader.toString()), \(self.payload.toString())"
     }
 }
