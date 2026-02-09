@@ -1,6 +1,6 @@
 import Testing
 
-@testable import SwiftMQTT
+@testable import SwiftMQTTAsync
 
 // MARK: Connack
 @Test("Create Connack Packet") func createConnackPacket() {
