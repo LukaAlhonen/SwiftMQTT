@@ -26,7 +26,7 @@ public enum ConnectReturnCode: UInt8, Sendable {
                 "RESERVED"
             }
 
-        return "Return Code: \(status)"
+        return "Return code: \(status)"
     }
 }
 
