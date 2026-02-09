@@ -1,9 +1,9 @@
 import NIOCore
-import NIOTransportServices
+import NIOPosix
 
 actor MQTTConnection {
     private var channel: NIOAsyncChannel<ByteBuffer, ByteBuffer>?
-    private let eventLoopGroup: NIOTSEventLoopGroup
+    private let eventLoopGroup: EventLoopGroup
 
     private let host: String
     private let port: Int
@@ -11,12 +11,12 @@ actor MQTTConnection {
     private let eventBus: MQTTEventBus<MQTTInternalEvent>
 
     public init(host: String, port: Int, eventBus: MQTTEventBus<MQTTInternalEvent>) {
-        if port <= 0 { fatalError("Invalid port number: \(port)")}
+        if port <= 0 { fatalError("Invalid port number: \(port)") }
 
         self.host = host
         self.port = port
 
-        self.eventLoopGroup = .init()
+        self.eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
 
         self.eventBus = eventBus
     }
@@ -45,15 +45,18 @@ actor MQTTConnection {
             self.eventBus.emit(.send(packet))
         }
 
-    let bootstrap = NIOTSConnectionBootstrap(group: self.eventLoopGroup)
-        .channelInitializer { channel in
-            channel.pipeline.addHandler(handler)
-        }
 
-    let channel = try await bootstrap
-        .connect(host: self.host, port: self.port) { channel in
-            channel.eventLoop.makeCompletedFuture {
-                return try NIOAsyncChannel<ByteBuffer, ByteBuffer>(wrappingChannelSynchronously: channel)
+        let bootstrap = ClientBootstrap(group: self.eventLoopGroup)
+            .channelInitializer { channel in
+                channel.pipeline.addHandler(handler)
+            }
+
+        let channel =
+            try await bootstrap
+            .connect(host: self.host, port: self.port) { channel in
+                channel.eventLoop.makeCompletedFuture {
+                    return try NIOAsyncChannel<ByteBuffer, ByteBuffer>(
+                        wrappingChannelSynchronously: channel)
                 }
             }
 

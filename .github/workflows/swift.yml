@@ -10,7 +10,7 @@ on:
     branches: ["main", "dev"]
 
 jobs:
-  build:
+  build-macos:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,3 +31,25 @@ jobs:
         if: always()
         run: |
           kill $(cat mosquitto.pid) || true
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: swift-actions/setup-swift@v3
+        with:
+          swift-version: 6.2.3
+      - name: Start test mosquitto broker
+        run: |
+          docker run -d --name test_broker -p 1883:1883 eclipse-mosquitto \
+          sh -c "echo 'listener 1883 0.0.0.0' > /tmp/mosquitto.conf && \
+          echo 'allow_anonymous true' >> /tmp/mosquitto.conf && \
+          mosquitto -c /tmp/mosquitto.conf -v"
+      - name: Build
+        run: swift build -v
+      - name: Run Tests
+        run: swift test -v
+      - name: Kill broker
+        if: always()
+        run: |
+          docker stop test_broker || true
+          docker rm test_broker || true
