@@ -4,10 +4,10 @@
 import PackageDescription
 
 let package = Package(
-    name: "SwiftMQTT",
+    name: "SwiftMQTTAsync",
     platforms: [.macOS(.v13)],
     products: [
-        .library(name: "SwiftMQTT", targets: ["SwiftMQTT"])
+        .library(name: "SwiftMQTTAsync", targets: ["SwiftMQTTAsync"])
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.94.0"),
@@ -16,13 +16,13 @@ let package = Package(
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
-            name: "SwiftMQTT",
+            name: "SwiftMQTTAsync",
             dependencies: [
                 .product(name: "NIO", package: "swift-nio"),
                 .product(name: "NIOCore", package: "swift-nio"),
                 .product(name: "NIOPosix", package: "swift-nio")
             ]
         ),
-        .testTarget(name: "SwiftMQTTTests", dependencies: [.target(name: "SwiftMQTT")]),
+        .testTarget(name: "SwiftMQTTTests", dependencies: [.target(name: "SwiftMQTTAsync")]),
     ]
 )
