@@ -1,10 +1,18 @@
 import Testing
+import Foundation
 
 @testable import SwiftMQTT
 
-@Test("Connect to broker and check that keepalive works") func connectClient() async {
+enum TestEnv {
+    static var host: String? {
+        ProcessInfo.processInfo.environment["MQTT_TEST_BROKER"]
+    }
+}
+
+@Test("Connect to broker and check that keepalive works", .enabled(if: TestEnv.host != nil)) func connectClient() async {
+    let host = TestEnv.host!
     let config = Config(keepAlive: 2)
-    let client = MQTTClient(clientId: "test-client", host: "localhost", port: 1883, config: config)
+    let client = MQTTClient(clientId: "test-client", host: host, port: 1883, config: config)
 
     let _ = try! await withTimeout(seconds: 1) {
         try await client.connect()
@@ -40,9 +48,10 @@ import Testing
     #expect(packets[5] as? Pingresp == Pingresp())
 }
 
-@Test("Subscribe") func testSubscribe() async {
+@Test("Subscribe", .enabled(if: TestEnv.host != nil)) func testSubscribe() async {
+    let host = TestEnv.host!
     let client = MQTTClient(
-        clientId: "test-subscriber", host: "localhost", port: 1883, config: .init())
+        clientId: "test-subscriber", host: host, port: 1883, config: .init())
 
     let _ = try! await withTimeout(seconds: 1) {
         try await client.connect()
@@ -88,8 +97,9 @@ import Testing
     #expect(packets[1] as? Suback == Suback(packetId: 1, returnCodes: [.QoS0]))
 }
 
-@Test("Unsub") func testUnsub() async {
-    let client = MQTTClient(clientId: "test-unsub", host: "localhost", port: 1883, config: .init())
+@Test("Unsub", .enabled(if: TestEnv.host != nil)) func testUnsub() async {
+    let host = TestEnv.host!
+    let client = MQTTClient(clientId: "test-unsub", host: host, port: 1883, config: .init())
 
     let _ = try! await withTimeout(seconds: 1) {
         try await client.connect()
@@ -135,11 +145,12 @@ import Testing
     #expect(packets[1] as? Unsuback == Unsuback(packetId: unsubPacket.varHeader.packetId))
 }
 
-@Test("QoS 0 publish and subscribe") func qos0PubSub() async {
+@Test("QoS 0 publish and subscribe", .enabled(if: TestEnv.host != nil)) func qos0PubSub() async {
+    let host = TestEnv.host!
     let subscriber: MQTTClient = .init(
-        clientId: "test-sub", host: "localhost", port: 1883, config: .init())
+        clientId: "test-sub", host: host, port: 1883, config: .init())
     let publisher: MQTTClient = .init(
-        clientId: "test-pub", host: "localhost", port: 1883, config: .init())
+        clientId: "test-pub", host: host, port: 1883, config: .init())
 
     let _ = try! await withTimeout(seconds: 1) {
         try await publisher.connect()
@@ -185,11 +196,12 @@ import Testing
     #expect(packet == pubPacket)
 }
 
-@Test("QoS 1 publish and subscribe") func qos1PubSub() async throws {
+@Test("QoS 1 publish and subscribe", .enabled(if: TestEnv.host != nil)) func qos1PubSub() async throws {
+    let host = TestEnv.host!
     let subscriber: MQTTClient = .init(
-        clientId: "test-sub1", host: "localhost", port: 1883, config: .init())
+        clientId: "test-sub1", host: host, port: 1883, config: .init())
     let publisher: MQTTClient = .init(
-        clientId: "test-pub1", host: "localhost", port: 1883, config: .init())
+        clientId: "test-pub1", host: host, port: 1883, config: .init())
 
     let _ = try! await withTimeout(seconds: 1) {
         try await publisher.connect()
@@ -247,11 +259,12 @@ import Testing
     #expect(packets[1] as? Puback == Puback(packetId: packetId))
 }
 
-@Test("QoS 2 publish and subscribe") func qos2PubSub() async throws {
+@Test("QoS 2 publish and subscribe", .enabled(if: TestEnv.host != nil)) func qos2PubSub() async throws {
+    let host = TestEnv.host!
     let subscriber: MQTTClient = .init(
-        clientId: "test-sub2", host: "localhost", port: 1883, config: .init())
+        clientId: "test-sub2", host: host, port: 1883, config: .init())
     let publisher: MQTTClient = .init(
-        clientId: "test-pub2", host: "localhost", port: 1883, config: .init())
+        clientId: "test-pub2", host: host, port: 1883, config: .init())
 
     let _ = try! await withTimeout(seconds: 1) {
         try await publisher.connect()
@@ -319,9 +332,10 @@ import Testing
     #expect(packets[3] as? Pubcomp == Pubcomp(packetId: packetId))
 }
 
-@Test("Disconnect client") func testDisconnect() async {
+@Test("Disconnect client", .enabled(if: TestEnv.host != nil)) func testDisconnect() async {
+    let host = TestEnv.host!
     let client: MQTTClient = .init(
-        clientId: "test-disconnect", host: "localhost", port: 1883, config: .init())
+        clientId: "test-disconnect-1", host: host, port: 1883, config: .init())
 
     let _ = try! await withTimeout(seconds: 1) {
         try await client.connect()
