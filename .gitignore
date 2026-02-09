@@ -10,3 +10,5 @@ notes.txt
 notes.md
 mosquitto.db
 mosquitto.log
+Package.resolved
+docker
