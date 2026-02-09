@@ -5,20 +5,24 @@ import PackageDescription
 
 let package = Package(
     name: "SwiftMQTT",
-    platforms: [.macOS(.v15)],
+    platforms: [.macOS(.v13)],
+    products: [
+        .library(name: "SwiftMQTT", targets: ["SwiftMQTT"])
+    ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-log", from: "1.6.0"),
-        .package(url: "https://github.com/apple/swift-nio-transport-services.git", from: "1.13.0"),
-        // .package(url: "https://github.com/SimplyDanny/SwiftLintPlugins", from: "0.63.2")
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.94.0"),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
-        .executableTarget(
+        .target(
             name: "SwiftMQTT",
-            dependencies: [.product(name: "Logging", package: "swift-log"), .product(name: "NIOTransportServices", package: "swift-nio-transport-services")],
-            // plugins: [.plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLintPlugins")]
+            dependencies: [
+                .product(name: "NIO", package: "swift-nio"),
+                .product(name: "NIOCore", package: "swift-nio"),
+                .product(name: "NIOPosix", package: "swift-nio")
+            ]
         ),
-        .testTarget(name: "SwiftMQTTTests", dependencies: [.target(name: "SwiftMQTT")])
+        .testTarget(name: "SwiftMQTTTests", dependencies: [.target(name: "SwiftMQTT")]),
     ]
 )
