@@ -335,7 +335,7 @@ enum TestEnv {
 @Test("Disconnect client", .enabled(if: TestEnv.host != nil)) func testDisconnect() async {
     let host = TestEnv.host!
     let client: MQTTClient = .init(
-        clientId: "test-disconnect", host: host, port: 1883, config: .init())
+        clientId: "test-disconnect-1", host: host, port: 1883, config: .init())
 
     let _ = try! await withTimeout(seconds: 1) {
         try await client.connect()
