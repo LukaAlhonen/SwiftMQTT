@@ -10,7 +10,6 @@ let package = Package(
         .library(name: "SwiftMQTT", targets: ["SwiftMQTT"])
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-log", from: "1.6.0"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.94.0"),
     ],
     targets: [
@@ -23,12 +22,6 @@ let package = Package(
                 .product(name: "NIOCore", package: "swift-nio"),
                 .product(name: "NIOPosix", package: "swift-nio")
             ]
-        ),
-        .executableTarget(
-            name: "SwiftMQTTCli",
-            dependencies: [
-                .product(name: "Logging", package: "swift-log"), .target(name: "SwiftMQTT"),
-            ],
         ),
         .testTarget(name: "SwiftMQTTTests", dependencies: [.target(name: "SwiftMQTT")]),
     ]
