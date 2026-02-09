@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 
-@testable import SwiftMQTT
+@testable import SwiftMQTTAsync
 
 enum TestEnv {
     static var host: String? {
