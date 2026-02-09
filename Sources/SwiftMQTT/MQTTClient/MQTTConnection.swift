@@ -1,9 +1,8 @@
 import NIOCore
-import NIOTransportServices
+import NIOPosix
 
 actor MQTTConnection {
     private var channel: NIOAsyncChannel<ByteBuffer, ByteBuffer>?
-    // private let eventLoopGroup: NIOTSEventLoopGroup
     private let eventLoopGroup: EventLoopGroup
 
     private let host: String
@@ -17,7 +16,7 @@ actor MQTTConnection {
         self.host = host
         self.port = port
 
-        self.eventLoopGroup = makeEventLoop()
+        self.eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
 
         self.eventBus = eventBus
     }
@@ -46,11 +45,11 @@ actor MQTTConnection {
             self.eventBus.emit(.send(packet))
         }
 
-        let bootstrap = makeBootstrap(group: self.eventLoopGroup)
-        // let bootstrap = NIOTSConnectionBootstrap(group: self.eventLoopGroup)
-        //     .channelInitializer { channel in
-        //         channel.pipeline.addHandler(handler)
-        //     }
+
+        let bootstrap = ClientBootstrap(group: self.eventLoopGroup)
+            .channelInitializer { channel in
+                channel.pipeline.addHandler(handler)
+            }
 
         let channel =
             try await bootstrap
