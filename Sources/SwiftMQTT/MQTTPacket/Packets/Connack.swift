@@ -8,22 +8,25 @@ public enum ConnectReturnCode: UInt8, Sendable {
     case Reserved
 
     public func toString() -> String {
-        switch self {
+        let status =
+            switch self {
             case .ConnectionAccepted:
-                return "CONNECTION ACCEPTED"
+                "CONNECTION ACCEPTED"
             case .UnnacceptableProtocolVersion:
-                return "UNNACCEPTABLE PROTOCOL VERSION"
+                "UNNACCEPTABLE PROTOCOL VERSION"
             case .IdentifierRejected:
-                return "IDENTIFIER REJECTED"
+                "IDENTIFIER REJECTED"
             case .ServerUnavailable:
-                return "SERVER UNAVAIALBLE"
+                "SERVER UNAVAIALBLE"
             case .BadAuth:
-                return "BAD AUTH"
+                "BAD AUTH"
             case .Unauthorized:
-                return "UNAUTHORIZED"
+                "UNAUTHORIZED"
             case .Reserved:
-                return "RESERVED"
-        }
+                "RESERVED"
+            }
+
+        return "Return Code: \(status)"
     }
 }
 
@@ -31,18 +34,22 @@ public struct ConnackVariableHeader: Equatable, Sendable {
     let sessionPresent: UInt8
     let connectReturnCode: ConnectReturnCode
 
-    init(sessionPresent: UInt8, connectReturnCode: ConnectReturnCode) {
+    public init(sessionPresent: UInt8, connectReturnCode: ConnectReturnCode) {
         self.sessionPresent = sessionPresent
         self.connectReturnCode = connectReturnCode
     }
 
-    func encode() -> Bytes {
+    public func encode() -> Bytes {
         var bytes: Bytes = []
 
         bytes.append(self.sessionPresent)
         bytes.append(self.connectReturnCode.rawValue)
 
         return bytes
+    }
+
+    public func toString() -> String {
+        return "Session present: \(self.sessionPresent), \(self.connectReturnCode.toString())"
     }
 }
 
@@ -53,30 +60,33 @@ public struct Connack: MQTTControlPacket {
 }
 
 // MARK: Init
-public extension Connack {
+extension Connack {
     // TODO: parse flags
-    init(bytes: Bytes) throws {
+    public init(bytes: Bytes) throws {
         let typeBits: Byte = bytes[0] >> 4
         guard let type = MQTTControlPacketType(rawValue: typeBits) else {
-            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidType(expected: .CONNACK, actual: typeBits)))
+            throw MQTTError.protocolViolation(
+                .malformedPacket(reason: .invalidType(expected: .CONNACK, actual: typeBits)))
         }
 
         if type != .CONNACK {
-            throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectType(expected: .CONNACK, actual: type)))
+            throw MQTTError.protocolViolation(
+                .malformedPacket(reason: .incorrectType(expected: .CONNACK, actual: type)))
         }
 
         let flags = bytes[0] & 0b00001111
         if flags != 0 {
-            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidFlags(expected: 0, actual: flags)))
+            throw MQTTError.protocolViolation(
+                .malformedPacket(reason: .invalidFlags(expected: 0, actual: flags)))
         }
 
-        if (bytes[1] != 2) {
+        if bytes[1] != 2 {
             throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidRemainingLenght))
         }
 
         self.fixedHeader = FixedHeader(type: .CONNACK, flags: flags, remainingLength: 2)
 
-        if (bytes[2] != 0 && bytes[2] != 1) {
+        if bytes[2] != 0 && bytes[2] != 1 {
             throw MQTTError.protocolViolation(.malformedPacket(reason: .reservedBitModified))
         }
 
@@ -84,18 +94,20 @@ public extension Connack {
             throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidReturnCode))
         }
 
-        self.varHeader = ConnackVariableHeader(sessionPresent: bytes[2], connectReturnCode: connectionReturnCode)
+        self.varHeader = ConnackVariableHeader(
+            sessionPresent: bytes[2], connectReturnCode: connectionReturnCode)
     }
 
-    init(returnCode: ConnectReturnCode, sessionPresent: Bool) {
+    public init(returnCode: ConnectReturnCode, sessionPresent: Bool) {
         self.fixedHeader = FixedHeader(type: .CONNACK, flags: 0, remainingLength: 2)
-        self.varHeader = ConnackVariableHeader(sessionPresent: sessionPresent ? 1 : 0, connectReturnCode: returnCode)
+        self.varHeader = ConnackVariableHeader(
+            sessionPresent: sessionPresent ? 1 : 0, connectReturnCode: returnCode)
     }
 }
 
 // MARK: Utils
-public extension Connack {
-    func encode() -> Bytes {
+extension Connack {
+    public func encode() -> Bytes {
         var bytes: Bytes = []
 
         bytes.append(contentsOf: self.fixedHeader.encode())
@@ -104,7 +116,8 @@ public extension Connack {
         return bytes
     }
 
-    func toString() -> String {
-        return "\(self.fixedHeader.toString()), session present: \(self.varHeader.sessionPresent), return code: \(self.varHeader.connectReturnCode.toString())"
+    public func toString() -> String {
+        return
+            "\(self.fixedHeader.toString()), \(self.varHeader.toString())"
     }
 }

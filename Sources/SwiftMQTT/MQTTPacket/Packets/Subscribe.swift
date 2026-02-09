@@ -19,7 +19,7 @@ public struct SubscribeVariableHeader: Equatable, Sendable {
     }
 
     public func toString() -> String {
-        return "packetId: \(self.packetId)"
+        return "Packet ID: \(self.packetId)"
     }
 }
 
@@ -43,8 +43,8 @@ public struct SubscribePayload: Equatable, Sendable {
     }
 
     public func toString() -> String {
-        let s = self.topics.map { "topic: \($0.topic), QoS: \($0.qos)"}.joined(separator: ", ")
-        return s
+        let s = self.topics.map { "Topic: \($0.topic), QoS: \($0.qos)" }.joined(separator: ", ")
+        return "Topics: [\(s)]"
     }
 }
 
@@ -56,7 +56,9 @@ public struct Subscribe: MQTTControlPacket {
     public init(packetId: UInt16 = 1, topics: [TopicFilter]) {
         self.varHeader = SubscribeVariableHeader(packetId: packetId)
         self.payload = SubscribePayload(topics: topics)
-        self.fixedHeader = FixedHeader(type: .SUBSCRIBE, flags: 0b0010, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
+        self.fixedHeader = FixedHeader(
+            type: .SUBSCRIBE, flags: 0b0010,
+            remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
     }
 
     public func encode() -> Bytes {
@@ -69,6 +71,7 @@ public struct Subscribe: MQTTControlPacket {
     }
 
     public func toString() -> String {
-        return "SUBSCRIBE [\(self.varHeader.toString())] [\(self.payload.toString())]"
+        return
+            "\(self.fixedHeader.toString()), \(self.varHeader.toString()), \(self.payload.toString())"
     }
 }

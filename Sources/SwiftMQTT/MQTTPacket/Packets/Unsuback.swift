@@ -10,7 +10,7 @@ public struct UnsubackVariableHeader: Equatable, Sendable {
     }
 
     public func toString() -> String {
-        return "PacketId: \(self.packetId)"
+        return "Packet ID: \(self.packetId)"
     }
 }
 
@@ -26,16 +26,19 @@ public struct Unsuback: MQTTControlPacket {
     public init(bytes: Bytes) throws {
         let typeBytes = bytes[0] >> 4
         guard let type = MQTTControlPacketType(rawValue: typeBytes) else {
-            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidType(expected: .UNSUBACK, actual: typeBytes)))
+            throw MQTTError.protocolViolation(
+                .malformedPacket(reason: .invalidType(expected: .UNSUBACK, actual: typeBytes)))
         }
 
         if type != .UNSUBACK {
-            throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectType(expected: .UNSUBACK, actual: type)))
+            throw MQTTError.protocolViolation(
+                .malformedPacket(reason: .incorrectType(expected: .UNSUBACK, actual: type)))
         }
 
         let flags = bytes[0] & 0b00001111
         if flags != 0 {
-            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidFlags(expected: 0, actual: flags)))
+            throw MQTTError.protocolViolation(
+                .malformedPacket(reason: .invalidFlags(expected: 0, actual: flags)))
         }
 
         let msgLen = bytes[1]

@@ -6,14 +6,14 @@ public enum SubackReturnCode: UInt8, Sendable {
 
     public func toString() -> String {
         switch self {
-            case .QoS0:
-                return "QoS 0"
-            case .QoS1:
-                return "QoS 1"
-            case .QoS2:
-                return "QoS 2"
-            case .Rejected:
-                return "Rejected"
+        case .QoS0:
+            return "QoS 0"
+        case .QoS1:
+            return "QoS 1"
+        case .QoS2:
+            return "QoS 2"
+        case .Rejected:
+            return "Rejected"
         }
     }
 }
@@ -47,7 +47,8 @@ public struct SubackPayload: Equatable, Sendable {
     }
 
     public func toString() -> String {
-        return self.returnCodes.map { $0.toString() }.joined(separator: ", ")
+        let codeString = self.returnCodes.map { $0.toString() }.joined(separator: ", ")
+        return "Return codes: [\(codeString)]"
     }
 }
 
@@ -61,6 +62,10 @@ public struct SubackVariableHeader: Equatable, Sendable {
     public func encode() -> Bytes {
         return encodeUInt16(self.packetId)
     }
+
+    public func toString() -> String {
+        return "Packet ID: \(self.packetId)"
+    }
 }
 
 public struct Suback: MQTTControlPacket {
@@ -69,37 +74,44 @@ public struct Suback: MQTTControlPacket {
     public var payload: SubackPayload
 }
 
-public extension Suback {
-    init(bytes: Bytes) throws {
+extension Suback {
+    public init(bytes: Bytes) throws {
         let typeBytes = bytes[0] >> 4
         guard let type = MQTTControlPacketType(rawValue: typeBytes) else {
-            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidType(expected: .SUBACK, actual: typeBytes)))
+            throw MQTTError.protocolViolation(
+                .malformedPacket(reason: .invalidType(expected: .SUBACK, actual: typeBytes)))
         }
 
         if type != .SUBACK {
-            throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectType(expected: .SUBACK, actual: type)))
+            throw MQTTError.protocolViolation(
+                .malformedPacket(reason: .incorrectType(expected: .SUBACK, actual: type)))
         }
 
         let flags = bytes[0] & 0b00001111
         if flags != 0 {
-            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidFlags(expected: 0, actual: flags)))
+            throw MQTTError.protocolViolation(
+                .malformedPacket(reason: .invalidFlags(expected: 0, actual: flags)))
         }
 
         let packetId = (UInt16(bytes[2]) << 8) | UInt16(bytes[3])
         self.varHeader = SubackVariableHeader(packetId: packetId)
         self.payload = try SubackPayload(bytes: Bytes(bytes[4..<bytes.count]))
-        self.fixedHeader = FixedHeader(type: type, flags: flags, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
+        self.fixedHeader = FixedHeader(
+            type: type, flags: flags,
+            remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
     }
 
-    init(packetId: UInt16, returnCodes: [SubackReturnCode]) {
+    public init(packetId: UInt16, returnCodes: [SubackReturnCode]) {
         self.varHeader = SubackVariableHeader(packetId: packetId)
         self.payload = SubackPayload(returnCodes: returnCodes)
-        self.fixedHeader = FixedHeader(type: .SUBACK, flags: 0, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
+        self.fixedHeader = FixedHeader(
+            type: .SUBACK, flags: 0,
+            remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
     }
 }
 
-public extension Suback {
-    func encode() -> Bytes {
+extension Suback {
+    public func encode() -> Bytes {
         var bytes: Bytes = []
         bytes.append(contentsOf: self.fixedHeader.encode())
         bytes.append(contentsOf: self.varHeader.encode())
@@ -108,7 +120,8 @@ public extension Suback {
         return bytes
     }
 
-    func toString() -> String {
-        return "Suback, packetId: \(self.varHeader.packetId), \(self.payload.toString())"
+    public func toString() -> String {
+        return
+            "\(self.fixedHeader.toString()), \(self.varHeader.toString()), \(self.payload.toString())"
     }
 }

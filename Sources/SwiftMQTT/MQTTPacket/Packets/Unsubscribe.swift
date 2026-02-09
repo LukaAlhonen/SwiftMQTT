@@ -21,7 +21,7 @@ public struct UnsubscribePayload: Equatable, Sendable {
 
     public func toString() -> String {
         let topicsString = self.topics.joined(separator: ", ")
-        return "Topics: \(topicsString)"
+        return "Topics: [\(topicsString)]"
     }
 }
 
@@ -37,7 +37,7 @@ public struct UnsubscribeVariableHeader: Equatable, Sendable {
     }
 
     public func toString() -> String {
-        return "PacketId: \(self.packetId)"
+        return "Packet ID: \(self.packetId)"
     }
 }
 
@@ -49,7 +49,9 @@ public struct Unsubscribe: MQTTControlPacket {
     public init(packetId: UInt16, topics: [String]) {
         self.varHeader = .init(packetId: packetId)
         self.payload = .init(topics: topics)
-        self.fixedHeader = .init(type: .UNSUBSCRIBE, flags: 2, remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
+        self.fixedHeader = .init(
+            type: .UNSUBSCRIBE, flags: 2,
+            remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
     }
 
     public func encode() -> Bytes {
@@ -61,8 +63,8 @@ public struct Unsubscribe: MQTTControlPacket {
         return bytes
     }
 
-
     public func toString() -> String {
-        return "\(self.fixedHeader.toString()), \(self.varHeader.toString()), \(self.payload.toString())"
+        return
+            "\(self.fixedHeader.toString()), \(self.varHeader.toString()), \(self.payload.toString())"
     }
 }

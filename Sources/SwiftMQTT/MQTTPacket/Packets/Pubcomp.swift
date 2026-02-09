@@ -1,16 +1,16 @@
 public struct PubcompVariableHeader: Equatable, Sendable {
     let packetId: UInt16
 
-    init(packetId: UInt16) {
+    public init(packetId: UInt16) {
         self.packetId = packetId
     }
 
-    func encode() -> Bytes {
+    public func encode() -> Bytes {
         return encodeUInt16(self.packetId)
     }
 
-    func toString() -> String {
-        return "packetId: \(self.packetId)"
+    public func toString() -> String {
+        return "Packet ID: \(self.packetId)"
     }
 }
 
@@ -19,27 +19,30 @@ public struct Pubcomp: MQTTControlPacket {
     public var varHeader: PubcompVariableHeader
 }
 
-public extension Pubcomp {
-    init(packetId: UInt16) {
+extension Pubcomp {
+    public init(packetId: UInt16) {
         self.fixedHeader = .init(type: .PUBCOMP, flags: 0, remainingLength: 2)
         self.varHeader = .init(packetId: packetId)
     }
 
-    init(bytes: Bytes) throws {
+    public init(bytes: Bytes) throws {
         let typeBytes = bytes[0] >> 4
         guard let type = MQTTControlPacketType(rawValue: typeBytes) else {
-            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidType(expected: .PUBCOMP, actual: typeBytes)))
+            throw MQTTError.protocolViolation(
+                .malformedPacket(reason: .invalidType(expected: .PUBCOMP, actual: typeBytes)))
         }
 
         if type != .PUBCOMP {
             // throw MQTTError.DecodePacketError(message: "Incorrect packet type, expected PUBCOMP, received: \(type.toString())")
-            throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectType(expected: .PUBCOMP, actual: type)))
+            throw MQTTError.protocolViolation(
+                .malformedPacket(reason: .incorrectType(expected: .PUBCOMP, actual: type)))
         }
 
         let flags = bytes[0] & 0b00001111
         if flags != 0 {
             // throw MQTTError.DecodePacketError(message: "Invalid flags")
-            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidFlags(expected: 0, actual: flags)))
+            throw MQTTError.protocolViolation(
+                .malformedPacket(reason: .invalidFlags(expected: 0, actual: flags)))
         }
 
         let msgLen = bytes[1]
@@ -52,8 +55,8 @@ public extension Pubcomp {
     }
 }
 
-public extension Pubcomp {
-    func encode() -> Bytes {
+extension Pubcomp {
+    public func encode() -> Bytes {
         var bytes: Bytes = []
         bytes.append(contentsOf: self.fixedHeader.encode())
         bytes.append(contentsOf: self.varHeader.encode())
@@ -61,8 +64,7 @@ public extension Pubcomp {
         return bytes
     }
 
-
-    func toString() -> String {
+    public func toString() -> String {
         return "\(self.fixedHeader.toString()), \(self.varHeader.toString())"
     }
 }
