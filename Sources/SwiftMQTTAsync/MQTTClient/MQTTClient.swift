@@ -1,4 +1,4 @@
-public actor MQTTClient {
+actor MQTTClient {
     private let config: Config
     private let clientId: String
 
@@ -8,7 +8,7 @@ public actor MQTTClient {
 
     private let internalEventStream: AsyncStream<MQTTInternalEvent>
     private let internalCommandStream: AsyncStream<MQTTInternalCommand>
-    public let eventStream: AsyncStream<MQTTEvent>
+    // public let eventStream: AsyncStream<MQTTEvent>
 
 
     private let session: MQTTSession
@@ -17,20 +17,21 @@ public actor MQTTClient {
 
     private var keepAliveTask: Task<Void, Never>?
 
-    public init(clientId: String, host: String, port: Int, config: Config) {
+    init(clientId: String, host: String, port: Int, config: Config, eventBus: MQTTEventBus<MQTTEvent>) {
         self.clientId = clientId
         self.config = config
 
         var internalCont: AsyncStream<MQTTInternalEvent>.Continuation!
         var internalCommandCont: AsyncStream<MQTTInternalCommand>.Continuation!
-        var cont: AsyncStream<MQTTEvent>.Continuation!
+        // var cont: AsyncStream<MQTTEvent>.Continuation!
 
         // TODO: Should probably let user define how many events to buffer
         self.internalEventStream = AsyncStream(bufferingPolicy: .bufferingNewest(10)) { internalCont = $0 }
-        self.eventStream = AsyncStream(bufferingPolicy: .bufferingNewest(10)) { cont = $0 }
+        // self.eventStream = AsyncStream(bufferingPolicy: .bufferingNewest(10)) { cont = $0 }
 
         self.internalEventBus = MQTTEventBus<MQTTInternalEvent>(continuation: internalCont)
-        self.eventBus = MQTTEventBus<MQTTEvent>(continuation: cont)
+        // self.eventBus = MQTTEventBus<MQTTEvent>(continuation: cont)
+        self.eventBus = eventBus
 
         self.internalCommandStream = AsyncStream(bufferingPolicy: .bufferingNewest(10)) { internalCommandCont = $0 }
         self.internalCommandBus = MQTTEventBus<MQTTInternalCommand>(continuation: internalCommandCont )
@@ -62,7 +63,7 @@ public actor MQTTClient {
     }
 }
 
-public extension MQTTClient {
+extension MQTTClient {
     func connect() async throws {
         try await self.connectLoop()
         self.startKeepAlive()
@@ -105,7 +106,7 @@ extension MQTTClient {
 }
 
 // MARK: Publish
-public extension MQTTClient {
+extension MQTTClient {
     @discardableResult func publish(bytes: Bytes, qos: QoS, topic: String) async throws -> Publish{
         let publish = switch qos {
             case .ExactlyOnce:
@@ -178,7 +179,7 @@ public extension MQTTClient {
 }
 
 // MARK: Subscribe
-public extension MQTTClient {
+extension MQTTClient {
     @discardableResult func subscribe(to topics: [TopicFilter]) async throws -> Subscribe {
         let packetId = await self.idAllocator.next()
         let subscribePacket = Subscribe(packetId: packetId, topics: topics)

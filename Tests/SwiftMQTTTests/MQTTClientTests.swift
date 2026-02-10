@@ -12,7 +12,7 @@ enum TestEnv {
 @Test("Connect to broker and check that keepalive works", .enabled(if: TestEnv.host != nil)) func connectClient() async {
     let host = TestEnv.host!
     let config = Config(keepAlive: 2)
-    let client = MQTTClient(clientId: "test-client", host: host, port: 1883, config: config)
+    let client = MQTTClientV3(clientId: "test-client", host: host, port: 1883, config: config)
 
     let _ = try! await withTimeout(seconds: 1) {
         try await client.connect()
@@ -20,7 +20,7 @@ enum TestEnv {
 
     let task = Task {
         var packets: [any MQTTControlPacket] = []
-        for await event in await client.eventStream {
+        for await event in client.eventStream {
             switch event {
             case .received(let packet):
                 packets.append(packet.inner())
@@ -50,7 +50,7 @@ enum TestEnv {
 
 @Test("Subscribe", .enabled(if: TestEnv.host != nil)) func testSubscribe() async {
     let host = TestEnv.host!
-    let client = MQTTClient(
+    let client = MQTTClientV3(
         clientId: "test-subscriber", host: host, port: 1883, config: .init())
 
     let _ = try! await withTimeout(seconds: 1) {
@@ -63,7 +63,7 @@ enum TestEnv {
 
     let task = Task {
         var packets: [any MQTTControlPacket] = []
-        for await event in await client.eventStream {
+        for await event in client.eventStream {
             switch event {
             case .received(let packet):
                 switch packet {
@@ -99,7 +99,7 @@ enum TestEnv {
 
 @Test("Unsub", .enabled(if: TestEnv.host != nil)) func testUnsub() async {
     let host = TestEnv.host!
-    let client = MQTTClient(clientId: "test-unsub", host: host, port: 1883, config: .init())
+    let client = MQTTClientV3(clientId: "test-unsub", host: host, port: 1883, config: .init())
 
     let _ = try! await withTimeout(seconds: 1) {
         try await client.connect()
@@ -111,7 +111,7 @@ enum TestEnv {
 
     let task = Task {
         var packets: [any MQTTControlPacket] = []
-        for await event in await client.eventStream {
+        for await event in client.eventStream {
             switch event {
             case .received(let packet):
                 switch packet {
@@ -147,9 +147,9 @@ enum TestEnv {
 
 @Test("QoS 0 publish and subscribe", .enabled(if: TestEnv.host != nil)) func qos0PubSub() async {
     let host = TestEnv.host!
-    let subscriber: MQTTClient = .init(
+    let subscriber: MQTTClientV3 = .init(
         clientId: "test-sub", host: host, port: 1883, config: .init())
-    let publisher: MQTTClient = .init(
+    let publisher: MQTTClientV3 = .init(
         clientId: "test-pub", host: host, port: 1883, config: .init())
 
     let _ = try! await withTimeout(seconds: 1) {
@@ -165,7 +165,7 @@ enum TestEnv {
     }
 
     let packetTask = Task {
-        for await event in await subscriber.eventStream {
+        for await event in subscriber.eventStream {
             switch event {
             case .received(let packet):
                 switch packet {
@@ -198,9 +198,9 @@ enum TestEnv {
 
 @Test("QoS 1 publish and subscribe", .enabled(if: TestEnv.host != nil)) func qos1PubSub() async throws {
     let host = TestEnv.host!
-    let subscriber: MQTTClient = .init(
+    let subscriber: MQTTClientV3 = .init(
         clientId: "test-sub1", host: host, port: 1883, config: .init())
-    let publisher: MQTTClient = .init(
+    let publisher: MQTTClientV3 = .init(
         clientId: "test-pub1", host: host, port: 1883, config: .init())
 
     let _ = try! await withTimeout(seconds: 1) {
@@ -217,7 +217,7 @@ enum TestEnv {
 
     let packetTask = Task {
         var packets: [any MQTTControlPacket] = []
-        for await event in await subscriber.eventStream {
+        for await event in subscriber.eventStream {
             switch event {
             case .received(let packet):
                 switch packet {
@@ -261,9 +261,9 @@ enum TestEnv {
 
 @Test("QoS 2 publish and subscribe", .enabled(if: TestEnv.host != nil)) func qos2PubSub() async throws {
     let host = TestEnv.host!
-    let subscriber: MQTTClient = .init(
+    let subscriber: MQTTClientV3 = .init(
         clientId: "test-sub2", host: host, port: 1883, config: .init())
-    let publisher: MQTTClient = .init(
+    let publisher: MQTTClientV3 = .init(
         clientId: "test-pub2", host: host, port: 1883, config: .init())
 
     let _ = try! await withTimeout(seconds: 1) {
@@ -280,7 +280,7 @@ enum TestEnv {
 
     let packetTask = Task {
         var packets: [any MQTTControlPacket] = []
-        for await event in await subscriber.eventStream {
+        for await event in subscriber.eventStream {
             switch event {
             case .received(let packet):
                 switch packet {
@@ -334,7 +334,7 @@ enum TestEnv {
 
 @Test("Disconnect client", .enabled(if: TestEnv.host != nil)) func testDisconnect() async {
     let host = TestEnv.host!
-    let client: MQTTClient = .init(
+    let client: MQTTClientV3 = .init(
         clientId: "test-disconnect-1", host: host, port: 1883, config: .init())
 
     let _ = try! await withTimeout(seconds: 1) {
@@ -344,7 +344,7 @@ enum TestEnv {
     let packetTask = Task {
         var packets: [any MQTTControlPacket] = []
 
-        for try await event in await client.eventStream {
+        for try await event in client.eventStream {
             switch event {
             case .send(let packet):
                 packets.append(packet)
