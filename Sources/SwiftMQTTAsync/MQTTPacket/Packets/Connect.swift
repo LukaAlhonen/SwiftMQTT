@@ -68,12 +68,12 @@ public struct ConnConnectFlags: Equatable, Sendable {
 
 public struct ConnVariableHeader: Equatable, Sendable {
     let protocolName: String
-    let protocolLevel: UInt8
+    let protocolLevel: Version
     let connectFlags: ConnConnectFlags
     let keepAlive: UInt16
 
     public init(
-        protocolName: String = "MQTT", protocolLevel: UInt8, connectFlags: ConnConnectFlags,
+        protocolName: String = "MQTT", protocolLevel: Version, connectFlags: ConnConnectFlags,
         keepAlive: UInt16
     ) {
         self.protocolName = protocolName
@@ -87,7 +87,7 @@ public struct ConnVariableHeader: Equatable, Sendable {
 
         data.append(contentsOf: encodeUInt16(UInt16(self.protocolName.count)))
         data.append(contentsOf: self.protocolName.utf8)
-        data.append(self.protocolLevel)
+        data.append(self.protocolLevel.rawValue)
         data.append(self.connectFlags.encode())
         data.append(contentsOf: encodeUInt16(self.keepAlive))
 
@@ -162,6 +162,7 @@ public struct Connect: MQTTControlPacket {
     public var payload: ConnPayload
 
     public init(
+        version: Version,
         clientId: String,
         keepAlive: UInt16,
         lwt: LWT? = nil,
@@ -170,7 +171,7 @@ public struct Connect: MQTTControlPacket {
     ) {
         self.varHeader = ConnVariableHeader(
             protocolName: "MQTT",
-            protocolLevel: 4,
+            protocolLevel: version,
             connectFlags: ConnConnectFlags(
                 auth: auth,
                 cleanSession: cleanSession,
