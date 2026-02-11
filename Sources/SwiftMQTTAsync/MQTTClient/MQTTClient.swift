@@ -17,7 +17,10 @@ actor MQTTClient {
 
     private var keepAliveTask: Task<Void, Never>?
 
-    init(clientId: String, host: String, port: Int, config: Config, eventBus: MQTTEventBus<MQTTEvent>) {
+    private let version: Version
+
+    init(version: Version, clientId: String, host: String, port: Int, config: Config, eventBus: MQTTEventBus<MQTTEvent>) {
+        self.version = version
         self.clientId = clientId
         self.config = config
 
@@ -71,7 +74,7 @@ extension MQTTClient {
 
     private func tryConnect() async throws {
         try await self.connection.connect()
-        try await self.send(Connect(clientId: self.clientId, keepAlive: 60))
+        try await self.send(Connect(version: self.version, clientId: self.clientId, keepAlive: 60))
         try await self.session.awaitConack()
     }
 

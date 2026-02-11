@@ -39,7 +39,7 @@ enum TestEnv {
         try await task.value
     }
 
-    #expect(packets[0] as? Connect == Connect(clientId: "test-client", keepAlive: config.keepAlive))
+    #expect(packets[0] as? Connect == Connect(version: .v3, clientId: "test-client", keepAlive: config.keepAlive))
     #expect(
         packets[1] as? Connack == Connack(returnCode: .ConnectionAccepted, sessionPresent: false))
     #expect(packets[2] as? Pingreq == Pingreq())

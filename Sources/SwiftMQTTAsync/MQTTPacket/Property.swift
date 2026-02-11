@@ -64,6 +64,40 @@ public extension Property {
     static func sharedSubscriptionAvailable(_ value: Byte) -> Property { return self.init(identifier: .sharedSubscriptionAvailable, value: .byte(value)) }
 }
 
+public extension Property {
+    func encode() -> Bytes {
+        var bytes: Bytes = [self.identifier.rawValue]
+        switch self.value {
+            case .byte(let byte):
+                bytes.append(byte)
+            case .binaryData(var bytes):
+                bytes.append(contentsOf: bytes)
+            case .utf8String(let string):
+                let stringBytes = Bytes(string.utf8)
+                bytes.append(contentsOf: encodeUInt16(UInt16(stringBytes.count)))
+                bytes.append(contentsOf: stringBytes)
+            case .utf8StringPair(let key, let value):
+                let keyBytes = Bytes(key.utf8)
+                let valueBytes = Bytes(value.utf8)
+
+                bytes.append(contentsOf: encodeUInt16(UInt16(keyBytes.count)))
+                bytes.append(contentsOf: keyBytes)
+
+                bytes.append(contentsOf: encodeUInt16(UInt16(valueBytes.count)))
+                bytes.append(contentsOf: valueBytes)
+            case .variableByteInt(let i):
+                bytes.append(contentsOf: encodeUInt(i))
+            case .twoByteInt(let i):
+                bytes.append(contentsOf: encodeUInt16(i))
+            case .fourByteInt(let i):
+                var big = i.bigEndian
+                let iBytes: Bytes = withUnsafeBytes(of: &big) { Array($0) }
+                bytes.append(contentsOf: iBytes)
+        }
+        return bytes
+    }
+}
+
 public enum PropertyValue: Sendable, Equatable {
     case byte(Byte)
     case fourByteInt(UInt32)
@@ -74,7 +108,7 @@ public enum PropertyValue: Sendable, Equatable {
     case variableByteInt(UInt)
 }
 
-public enum PropertyIdentifier: UInt8, Sendable, Equatable {
+public enum PropertyIdentifier: Byte, Sendable, Equatable {
     case payloadFormatIndicator = 0x01
     case messageExpiryInterval = 0x02
     case contentType = 0x03

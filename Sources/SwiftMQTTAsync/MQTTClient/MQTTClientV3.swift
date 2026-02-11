@@ -7,7 +7,7 @@ public final class MQTTClientV3: Sendable {
         self.eventStream = AsyncStream(bufferingPolicy: .bufferingNewest(10)) { cont = $0 }
         let eventBus = MQTTEventBus<MQTTEvent>(continuation: cont)
 
-        self.client = .init(clientId: clientId, host: host, port: port, config: config, eventBus: eventBus)
+        self.client = .init(version: .v3, clientId: clientId, host: host, port: port, config: config, eventBus: eventBus)
     }
 }
 

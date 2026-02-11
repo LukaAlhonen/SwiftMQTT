@@ -31,7 +31,7 @@ import Testing
 
 // MARK: Connect
 @Test("Create Connect Packet") func createConnectPacket() {
-    let connectPacket = Connect(clientId: "swift-1", keepAlive: 60)
+    let connectPacket = Connect(version: .v3, clientId: "swift-1", keepAlive: 60)
     #expect(connectPacket.fixedHeader == FixedHeader(type: .CONNECT, flags: 0, remainingLength: 19))
     #expect(
         connectPacket.varHeader.encode() == [
@@ -42,7 +42,7 @@ import Testing
 }
 
 @Test("Encode Connect Packet") func encodeConnectPacket() {
-    let connectPacket = Connect(clientId: "swift-1", keepAlive: 60)
+    let connectPacket = Connect(version: .v3, clientId: "swift-1", keepAlive: 60)
     #expect(
         connectPacket.encode() == [
             0x10, 0x13, 0x00, 0x04, 0x4D, 0x51, 0x54, 0x54, 0x04, 0x02, 0x00, 0x3C, 0x00, 0x07,
