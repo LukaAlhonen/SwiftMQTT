@@ -97,17 +97,35 @@ public extension DisconnectReasonCode {
     }
 }
 
-public struct DisconnectProperties: Sendable, Equatable {
+public struct DisconnectProperties: Properties {
     public var sessionExpiryInterval: Property?
     public var reasonString: Property?
-    public var userProperty: Property? // TODO: change to array
+    public var userProperties: [Property] = []
     public var serverReference: Property?
 
-    public init(sessionExpiryInterval: UInt32? = nil, reasonString: String? = nil, userProperty: (String, String)? = nil, serverReference: String? = nil) {
-        if let value = sessionExpiryInterval { self.sessionExpiryInterval = Property.sessionExpiryInterval(value)}
-        if let value = reasonString { self.reasonString = Property.reasonString(value)}
-        if let (key, value) = userProperty { self.userProperty = Property.userProperty(key, value)}
-        if let value = serverReference { self.serverReference = Property.serverReference(value)}
+    internal var properties: [Property?] {
+        var p: [Property?] = []
+
+        p.append(sessionExpiryInterval)
+        p.append(reasonString)
+        for property in userProperties {p.append(property)}
+        p.append(serverReference)
+
+        return p
+    }
+
+    public init(
+        sessionExpiryInterval: UInt32? = nil,
+        reasonString: String? = nil,
+        userProperties: [(String, String)]? = nil,
+        serverReference: String? = nil
+    ) {
+        if let sessionExpiryInterval { self.sessionExpiryInterval = Property.sessionExpiryInterval(sessionExpiryInterval)}
+        if let reasonString { self.reasonString = Property.reasonString(reasonString)}
+        if let userProperties {
+            for (key, value) in userProperties { self.userProperties.append(Property.userProperty(key, value))}
+        }
+        if let serverReference { self.serverReference = Property.serverReference(serverReference)}
     }
 
     public init(from properties: [Property]) throws {
@@ -118,46 +136,13 @@ public struct DisconnectProperties: Sendable, Equatable {
                 case .reasonString:
                     try self.setProperty(&self.reasonString, property)
                 case .userProperty:
-                    try self.setProperty(&self.userProperty, property)
+                    self.userProperties.append(property)
                 case .serverReference:
                     try self.setProperty(&self.serverReference, property)
                 default:
                     throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectdProperty(inPacket: .DISCONNECT)))
             }
         }
-    }
-
-    public func encode() -> Bytes {
-        var bytes: Bytes = []
-        var pBytes: Bytes = []
-
-        pBytes.append(contentsOf: self.sessionExpiryInterval?.encode() ?? [])
-        pBytes.append(contentsOf: self.reasonString?.encode() ?? [])
-        pBytes.append(contentsOf: self.userProperty?.encode() ?? [])
-        pBytes.append(contentsOf: self.serverReference?.encode() ?? [])
-
-        bytes.append(contentsOf: encodeUInt(UInt(pBytes.count)))
-        bytes.append(contentsOf: pBytes)
-
-        return bytes
-    }
-
-    private func setProperty(_ field: inout Property?, _ value: Property) throws {
-        if field != nil {
-            throw MQTTError.protocolViolation(.malformedPacket(reason: .duplicateProperty))
-        }
-        field = value
-    }
-
-    public func toString() -> String {
-        var pString: [String] = []
-
-        if let sessionExpiryInterval = self.sessionExpiryInterval { pString.append("sessionExpiryInterval: \(sessionExpiryInterval)")}
-        if let reasonString = self.reasonString { pString.append("reasonString: \(reasonString)")}
-        if let userProperty = self.userProperty { pString.append("userProperty: \(userProperty)")}
-        if let serverReference = self.serverReference { pString.append("serverReference: \(serverReference)")}
-
-        return pString.joined(separator: ", ")
     }
 }
 

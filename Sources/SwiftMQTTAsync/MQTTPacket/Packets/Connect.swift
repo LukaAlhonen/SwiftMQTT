@@ -1,15 +1,31 @@
 import Foundation
 
-public struct ConnectProperties: Equatable, Sendable {
+public struct ConnectProperties: Properties {
     public var sessionExpiryInterval: Property?
     public var receiveMaximum: Property?
     public var maximumPacketSize: Property?
     public var topicAliasMaximum: Property?
     public var requestResponseInformation: Property?
     public var requestProblemInformation: Property?
-    public var userProperty: Property?
+    public var userProperties: [Property] = []
     public var authenticationMethod: Property?
     public var authenticationData: Property?
+
+    internal var properties: [Property?] {
+        var p: [Property?] = []
+
+        p.append(sessionExpiryInterval)
+        p.append(receiveMaximum)
+        p.append(maximumPacketSize)
+        p.append(topicAliasMaximum)
+        p.append(requestResponseInformation)
+        p.append(requestProblemInformation)
+        for property in userProperties {p.append(property)}
+        p.append(authenticationMethod)
+        p.append(authenticationData)
+
+        return p
+    }
 
     public init(
         sessionExpiryInterval: UInt32? = nil,
@@ -18,64 +34,73 @@ public struct ConnectProperties: Equatable, Sendable {
         topicAliasMaximum: UInt16? = nil,
         requestResponseInformation: Byte? = nil,
         requestProblemInformation: Byte? = nil,
-        userProperty: (String, String)? = nil,
+        userProperties: [(String, String)]? = nil,
         authenticationMethod: String? = nil,
         authenticationData: Bytes? = nil
     ) {
-        if let sessionExpiryInterval = sessionExpiryInterval { self.sessionExpiryInterval = Property.sessionExpiryInterval(sessionExpiryInterval) }
-        if let receiveMaximum = receiveMaximum {self.receiveMaximum = Property.receiveMaximum(receiveMaximum)}
-        if let maximumPacketSize = maximumPacketSize {self.maximumPacketSize = Property.maximumPacketSize(maximumPacketSize)}
-        if let topicAliasMaximum = topicAliasMaximum {self.topicAliasMaximum = Property.topicAliasMaximum(topicAliasMaximum)}
-        if let requestResponseInformation = requestResponseInformation {self.requestResponseInformation = Property.requestResponseInformation(requestResponseInformation)}
-        if let requestProblemInformation = requestProblemInformation {self.requestProblemInformation = Property.requestProblemInformation(requestProblemInformation)}
-        if let userProperty = userProperty {self.userProperty = Property.userProperty(userProperty.0, userProperty.1)}
-        if let authenticationMethod = authenticationMethod {self.authenticationMethod = Property.authenticationMethod(authenticationMethod)}
-        if let authenticationData = authenticationData {self.authenticationData = Property.authenticationData(authenticationData)}
+        if let sessionExpiryInterval { self.sessionExpiryInterval = Property.sessionExpiryInterval(sessionExpiryInterval) }
+        if let receiveMaximum {self.receiveMaximum = Property.receiveMaximum(receiveMaximum)}
+        if let maximumPacketSize {self.maximumPacketSize = Property.maximumPacketSize(maximumPacketSize)}
+        if let topicAliasMaximum {self.topicAliasMaximum = Property.topicAliasMaximum(topicAliasMaximum)}
+        if let requestResponseInformation {self.requestResponseInformation = Property.requestResponseInformation(requestResponseInformation)}
+        if let requestProblemInformation {self.requestProblemInformation = Property.requestProblemInformation(requestProblemInformation)}
+        if let userProperties {
+            for (key, value) in userProperties { self.userProperties.append(Property.userProperty(key, value))}
+        }
+        if let authenticationMethod {self.authenticationMethod = Property.authenticationMethod(authenticationMethod)}
+        if let authenticationData {self.authenticationData = Property.authenticationData(authenticationData)}
     }
 
-    public func encode() -> Bytes {
-        var propertyBytes: Bytes = []
-        var bytes: Bytes = []
-        if let sessionExpiryInterval = self.sessionExpiryInterval { propertyBytes.append(contentsOf: sessionExpiryInterval.encode())}
-        if let receiveMaximum = self.receiveMaximum { propertyBytes.append(contentsOf: receiveMaximum.encode())}
-        if let maximumPacketSize = self.maximumPacketSize { propertyBytes.append(contentsOf: maximumPacketSize.encode())}
-        if let topicAliasMaximum = self.topicAliasMaximum { propertyBytes.append(contentsOf: topicAliasMaximum.encode())}
-        if let requestResponseInformation = self.requestResponseInformation { propertyBytes.append(contentsOf: requestResponseInformation.encode())}
-        if let requestProblemInformation = self.requestProblemInformation { propertyBytes.append(contentsOf: requestProblemInformation.encode())}
-        if let userProperty = self.userProperty { propertyBytes.append(contentsOf: userProperty.encode())}
-        if let authenticationMethod = self.authenticationMethod { propertyBytes.append(contentsOf: authenticationMethod.encode())}
-        if let authenticationData = self.authenticationData { propertyBytes.append(contentsOf: authenticationData.encode())}
-        bytes.append(contentsOf: encodeUInt(UInt(propertyBytes.count)))
-        bytes.append(contentsOf: propertyBytes)
-
-        return bytes
-    }
-
-    public func toString() -> String {
-        var pString: [String] = []
-
-        if let sessionExpiryInterval = self.sessionExpiryInterval { pString.append("sessionExpiryInterval: \(sessionExpiryInterval)")}
-        if let receiveMaximum = self.receiveMaximum { pString.append("receiveMaximum: \(receiveMaximum))")}
-        if let maximumPacketSize = self.maximumPacketSize { pString.append("maximumPacketSize: \(maximumPacketSize)")}
-        if let topicAliasMaximum = self.topicAliasMaximum { pString.append("topicAliasMaximum: \(topicAliasMaximum)")}
-        if let requestResponseInformation = self.requestResponseInformation { pString.append("requestResponseInformation: \(requestResponseInformation)")}
-        if let requestProblemInformation = self.requestProblemInformation { pString.append("requestProblemInformation: \(requestProblemInformation)")}
-        if let userProperty = self.userProperty { pString.append("userProperty: \(userProperty)")}
-        if let authenticationMethod = self.authenticationMethod { pString.append("authenticationMethod: \(authenticationMethod)")}
-        if let authenticationData = self.authenticationData { pString.append("authenticationData: \(authenticationData)")}
-
-        return pString.joined(separator: ", ")
+    public init(from properties: [Property]) throws {
+        for property in properties {
+            switch property.identifier {
+                case .sessionExpiryInterval:
+                    try self.setProperty(&self.sessionExpiryInterval, property)
+                case .receiveMaximum:
+                    try self.setProperty(&self.receiveMaximum, property)
+                case .maximumPacketSize:
+                    try self.setProperty(&self.maximumPacketSize, property)
+                case .topicAliasMaximum:
+                    try self.setProperty(&self.topicAliasMaximum, property)
+                case .requestResponseInformation:
+                    try self.setProperty(&self.requestResponseInformation, property)
+                case .requestProblemInformation:
+                    try self.setProperty(&self.requestProblemInformation, property)
+                case .userProperty:
+                    self.userProperties.append(property)
+                case.authenticationMethod:
+                    try self.setProperty(&self.authenticationMethod, property)
+                case .authenticationData:
+                    try self.setProperty(&self.authenticationData, property)
+                default:
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectdProperty(inPacket: .CONNACK)))
+            }
+        }
     }
 }
 
-public struct WillProperties: Equatable, Sendable {
+public struct WillProperties: Properties {
     public var willDelayInterval: Property? = nil
     public var payloadFormatIndicator: Property? = nil
     public var messageExpiryInterval: Property? = nil
     public var contentType: Property? = nil
     public var responseTopic: Property? = nil
     public var correlationData: Property? = nil
-    public var userProperty: Property? = nil
+    public var userProperties: [Property] = []
+
+    internal var properties: [Property?] {
+        var p: [Property?] = []
+
+        p.append(willDelayInterval)
+        p.append(payloadFormatIndicator)
+        p.append(messageExpiryInterval)
+        p.append(contentType)
+        p.append(responseTopic)
+        p.append(correlationData)
+        for property in userProperties {p.append(property)}
+
+        return p
+    }
 
     public init(
         willDelayInterval: UInt32? = nil,
@@ -84,44 +109,40 @@ public struct WillProperties: Equatable, Sendable {
         contentType: String? = nil,
         responseTopic: String? = nil,
         correlationData: Bytes? = nil,
-        userProperty: (String, String)? = nil
+        userProperties: [(String, String)]? = nil
     ) {
-        if let willDelayInterval = willDelayInterval { self.willDelayInterval = Property.willDelayInterval(willDelayInterval) }
-        if let payloadFormatIndicator = payloadFormatIndicator { self.payloadFormatIndicator = Property.payloadFormatIndicator(payloadFormatIndicator)}
-        if let messageExpiryInterval = messageExpiryInterval { self.messageExpiryInterval = Property.messageExpiryInterval(messageExpiryInterval)}
-        if let contentType = contentType { self.contentType = Property.contentType(contentType)}
-        if let responseTopic = responseTopic { self.responseTopic = Property.responseTopic(responseTopic) }
-        if let correlationData = correlationData { self.correlationData = Property.correlationData(correlationData) }
-        if let userProperty = userProperty { self.userProperty = Property.userProperty(userProperty.0, userProperty.1)}
+        if let willDelayInterval { self.willDelayInterval = Property.willDelayInterval(willDelayInterval) }
+        if let payloadFormatIndicator { self.payloadFormatIndicator = Property.payloadFormatIndicator(payloadFormatIndicator)}
+        if let messageExpiryInterval { self.messageExpiryInterval = Property.messageExpiryInterval(messageExpiryInterval)}
+        if let contentType { self.contentType = Property.contentType(contentType)}
+        if let responseTopic { self.responseTopic = Property.responseTopic(responseTopic) }
+        if let correlationData { self.correlationData = Property.correlationData(correlationData) }
+        if let userProperties {
+            for (key, value) in userProperties {self.userProperties.append(Property.userProperty(key, value))}
+        }
     }
 
-    public func encode() -> Bytes {
-        var pBytes: Bytes = []
-        var bytes: Bytes = []
-        pBytes.append(contentsOf: self.willDelayInterval?.encode() ?? [])
-        pBytes.append(contentsOf: self.payloadFormatIndicator?.encode() ?? [])
-        pBytes.append(contentsOf: self.messageExpiryInterval?.encode() ?? [])
-        pBytes.append(contentsOf: self.contentType?.encode() ?? [])
-        pBytes.append(contentsOf: self.responseTopic?.encode() ?? [])
-        pBytes.append(contentsOf: self.correlationData?.encode() ?? [])
-        pBytes.append(contentsOf: self.userProperty?.encode() ?? [])
-        bytes.append(contentsOf: encodeUInt(UInt(pBytes.count)))
-        bytes.append(contentsOf: pBytes)
-
-        return bytes
-    }
-
-    public func toString() -> String {
-        var pString: [String] = []
-        if let willDelayInterval = self.willDelayInterval { pString.append("willDelayInterval: \(willDelayInterval)")}
-        if let payloadFormatIndicator = self.payloadFormatIndicator { pString.append("payloadFormatIndicator: \(payloadFormatIndicator)")}
-        if let messageExpiryInterval = self.messageExpiryInterval { pString.append("messageExpiryInterval: \(messageExpiryInterval)")}
-        if let contentType = self.contentType { pString.append("contentType: \(contentType)")}
-        if let responseTopic = self.responseTopic { pString.append("responseTopic: \(responseTopic)")}
-        if let correlationData = self.correlationData { pString.append("correlationData: \(correlationData)")}
-        if let userProperty = self.userProperty { pString.append("userProperty: \(userProperty)")}
-
-        return pString.joined(separator: ", ")
+    public init(from properties: [Property]) throws {
+        for property in properties {
+            switch property.identifier {
+                case .willDelayInterval:
+                    try self.setProperty(&self.willDelayInterval, property)
+                case .payloadFormatIndicator:
+                    try self.setProperty(&self.payloadFormatIndicator, property)
+                case .messageExpiryInterval:
+                    try self.setProperty(&self.messageExpiryInterval, property)
+                case .contentType:
+                    try self.setProperty(&self.contentType, property)
+                case .responseTopic:
+                    try self.setProperty(&self.responseTopic, property)
+                case .correlationData:
+                    try self.setProperty(&self.correlationData, property)
+                case .userProperty:
+                    self.userProperties.append(property)
+                default:
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectdProperty(inPacket: .CONNACK)))
+            }
+        }
     }
 }
 

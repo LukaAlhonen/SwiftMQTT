@@ -57,11 +57,11 @@ public enum ConnectReasonCode: Byte, Sendable {
     case connectionRateExceeded = 0x9f
 
     public func toString() -> String {
-        return ""
+        return "\(self)"
     }
 }
 
-public struct ConnackProperties: Sendable, Equatable {
+public struct ConnackProperties: Properties {
     public var sessionExpiryInterval: Property? = nil
     public var receiveMaximum: Property? = nil
     public var maximumQoS: Property? = nil
@@ -70,7 +70,7 @@ public struct ConnackProperties: Sendable, Equatable {
     public var assignedClientIdentifier: Property? = nil
     public var topicAliasMaximum: Property? = nil
     public var reasonString: Property? = nil
-    public var userProperty: Property? = nil // TODO: turn into array since this prop can appear multiple times
+    public var userProperties: [Property] = []
     public var wildcardSubscriptionAvailable: Property? = nil
     public var subscriptionIdentifierAvailable: Property? = nil
     public var sharedSubscriptionAvailable: Property? = nil
@@ -79,6 +79,30 @@ public struct ConnackProperties: Sendable, Equatable {
     public var serverReference: Property? = nil
     public var authenticationMethod: Property? = nil
     public var authenticationData: Property? = nil
+
+    internal var properties: [Property?] {
+        var p: [Property?] = []
+
+        p.append(sessionExpiryInterval)
+        p.append(receiveMaximum)
+        p.append(maximumQoS)
+        p.append(retainAvailable)
+        p.append(maximumPacketSize)
+        p.append(assignedClientIdentifier)
+        p.append(topicAliasMaximum)
+        p.append(reasonString)
+        for property in userProperties { p.append(property) }
+        p.append(wildcardSubscriptionAvailable)
+        p.append(subscriptionIdentifierAvailable)
+        p.append(sharedSubscriptionAvailable)
+        p.append(serverKeepalive)
+        p.append(responseInformation)
+        p.append(serverReference)
+        p.append(authenticationMethod)
+        p.append(authenticationData)
+
+        return p
+    }
 
     public init(
         sessionExpiryInterval: UInt32? = nil,
@@ -89,7 +113,7 @@ public struct ConnackProperties: Sendable, Equatable {
         assignedClientIdentifier: String? = nil,
         topicAliasMaximum: UInt16? = nil,
         reasonString: String? = nil,
-        userProperty: (String, String)? = nil, // TODO: turn into array since this prop can appear multiple times
+        userProperties: [(String, String)]? = nil,
         wildcardSubscriptionAvailable: Byte? = nil,
         subscriptionIdentifierAvailable: Byte? = nil,
         sharedSubscriptionAvailable: Byte? = nil,
@@ -99,23 +123,25 @@ public struct ConnackProperties: Sendable, Equatable {
         authenticationMethod: String? = nil,
         authenticationData: Bytes? = nil
     ) {
-        if let val = sessionExpiryInterval { self.sessionExpiryInterval = Property.sessionExpiryInterval(val)}
-        if let val = receiveMaximum { self.receiveMaximum = Property.receiveMaximum(val)}
-        if let val = maximumQoS { self.maximumQoS = Property.maximumQoS(val)}
-        if let val = retainAvailable { self.retainAvailable = Property.retainAvailable(val)}
-        if let val = maximumPacketSize { self.maximumPacketSize = Property.maximumPacketSize(val)}
-        if let val = assignedClientIdentifier { self.assignedClientIdentifier = Property.assignedClientIdentifier(val)}
-        if let val = topicAliasMaximum { self.topicAliasMaximum = Property.topicAliasMaximum(val)}
-        if let val = reasonString  { self.reasonString = Property.reasonString(val)}
-        if let val = userProperty { self.userProperty = Property.userProperty(val.0, val.1)}
-        if let val = wildcardSubscriptionAvailable { self.wildcardSubscriptionAvailable = Property.wildcardSubscriptionAvailable(val)}
-        if let val = subscriptionIdentifierAvailable { self.subscriptionIdentifierAvailable = Property.subscriptionIdentifierAvailable(val)}
-        if let val = sharedSubscriptionAvailable { self.sharedSubscriptionAvailable = Property.sharedSubscriptionAvailable(val)}
-        if let val = serverKeepalive { self.serverKeepalive = Property.serverKeepalive(val)}
-        if let val = responseInformation { self.responseInformation = Property.responseInformation(val)}
-        if let val = serverReference { self.serverReference = Property.serverReference(val)}
-        if let val = authenticationMethod { self.authenticationMethod = Property.authenticationMethod(val)}
-        if let val = authenticationData { self.authenticationData = Property.authenticationData(val)}
+        if let sessionExpiryInterval { self.sessionExpiryInterval = Property.sessionExpiryInterval(sessionExpiryInterval)}
+        if let receiveMaximum { self.receiveMaximum = Property.receiveMaximum(receiveMaximum)}
+        if let maximumQoS { self.maximumQoS = Property.maximumQoS(maximumQoS)}
+        if let retainAvailable { self.retainAvailable = Property.retainAvailable(retainAvailable)}
+        if let maximumPacketSize { self.maximumPacketSize = Property.maximumPacketSize(maximumPacketSize)}
+        if let assignedClientIdentifier { self.assignedClientIdentifier = Property.assignedClientIdentifier(assignedClientIdentifier)}
+        if let topicAliasMaximum { self.topicAliasMaximum = Property.topicAliasMaximum(topicAliasMaximum)}
+        if let reasonString  { self.reasonString = Property.reasonString(reasonString)}
+        if let userProperties {
+            for (key, value) in userProperties { self.userProperties.append(Property.userProperty(key, value))}
+        }
+        if let wildcardSubscriptionAvailable { self.wildcardSubscriptionAvailable = Property.wildcardSubscriptionAvailable(wildcardSubscriptionAvailable)}
+        if let subscriptionIdentifierAvailable { self.subscriptionIdentifierAvailable = Property.subscriptionIdentifierAvailable(subscriptionIdentifierAvailable)}
+        if let sharedSubscriptionAvailable { self.sharedSubscriptionAvailable = Property.sharedSubscriptionAvailable(sharedSubscriptionAvailable)}
+        if let serverKeepalive { self.serverKeepalive = Property.serverKeepalive(serverKeepalive)}
+        if let responseInformation { self.responseInformation = Property.responseInformation(responseInformation)}
+        if let serverReference { self.serverReference = Property.serverReference(serverReference)}
+        if let authenticationMethod { self.authenticationMethod = Property.authenticationMethod(authenticationMethod)}
+        if let authenticationData { self.authenticationData = Property.authenticationData(authenticationData)}
     }
 
     public init(from properties: [Property]) throws {
@@ -138,7 +164,7 @@ public struct ConnackProperties: Sendable, Equatable {
                 case .reasonString:
                     try setProperty(&reasonString, property)
                 case .userProperty:
-                    try setProperty(&userProperty, property)
+                    self.userProperties.append(property)
                 case .wildcardSubscriptionAvailable:
                     try setProperty(&wildcardSubscriptionAvailable, property)
                 case .subscriptionIdentifierAvailable:
@@ -159,63 +185,6 @@ public struct ConnackProperties: Sendable, Equatable {
                     throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectdProperty(inPacket: .CONNACK)))
             }
         }
-    }
-
-    private func setProperty(_ field: inout Property?, _ value: Property) throws {
-        if field != nil {
-            throw MQTTError.protocolViolation(.malformedPacket(reason: .duplicateProperty))
-        }
-        field = value
-    }
-
-    public func encode() -> Bytes {
-        var pBytes: Bytes = []
-        var bytes: Bytes = []
-        pBytes.append(contentsOf: self.sessionExpiryInterval?.encode() ?? [])
-        pBytes.append(contentsOf: self.receiveMaximum?.encode() ?? [])
-        pBytes.append(contentsOf: self.maximumQoS?.encode() ?? [])
-        pBytes.append(contentsOf: self.retainAvailable?.encode() ?? [])
-        pBytes.append(contentsOf: self.maximumPacketSize?.encode() ?? [])
-        pBytes.append(contentsOf: self.assignedClientIdentifier?.encode() ?? [])
-        pBytes.append(contentsOf: self.topicAliasMaximum?.encode() ?? [])
-        pBytes.append(contentsOf: self.reasonString?.encode() ?? [])
-        pBytes.append(contentsOf: self.userProperty?.encode() ?? [])
-        pBytes.append(contentsOf: self.wildcardSubscriptionAvailable?.encode() ?? [])
-        pBytes.append(contentsOf: self.subscriptionIdentifierAvailable?.encode() ?? [])
-        pBytes.append(contentsOf: self.sharedSubscriptionAvailable?.encode() ?? [])
-        pBytes.append(contentsOf: self.serverKeepalive?.encode() ?? [])
-        pBytes.append(contentsOf: self.responseInformation?.encode() ?? [])
-        pBytes.append(contentsOf: self.serverReference?.encode() ?? [])
-        pBytes.append(contentsOf: self.authenticationMethod?.encode() ?? [])
-        pBytes.append(contentsOf: self.authenticationData?.encode() ?? [])
-        bytes.append(contentsOf: encodeUInt(UInt(pBytes.count)))
-        bytes.append(contentsOf: pBytes)
-
-        return bytes
-    }
-
-    public func toString() -> String {
-        var pString: [String] = []
-
-        if let sessionExpiryInterval = self.sessionExpiryInterval { pString.append("sessionExpiryInterval: \(sessionExpiryInterval)")}
-        if let receiveMaximum = self.receiveMaximum { pString.append("receiveMaximum: \(receiveMaximum))")}
-        if let maximumQoS = self.maximumQoS { pString.append("maximumQoS: \(maximumQoS)")}
-        if let retainAvailable = self.retainAvailable { pString.append("retainAvailable: \(retainAvailable)")}
-        if let maximumPacketSize = self.maximumPacketSize { pString.append("maximumPacketSize: \(maximumPacketSize)")}
-        if let assignedClientIdentifier = self.assignedClientIdentifier { pString.append("assignedClientIdentifier: \(assignedClientIdentifier)")}
-        if let topicAliasMaximum = self.topicAliasMaximum { pString.append("topicAliasMaximum: \(topicAliasMaximum)")}
-        if let reasonString = self.reasonString { pString.append("reasonString: \(reasonString)")}
-        if let userProperty = self.userProperty { pString.append("userProperty: \(userProperty)")}
-        if let wildcardSubscriptionAvailable = self.wildcardSubscriptionAvailable { pString.append("wildcardSubscriptionAvailable: \(wildcardSubscriptionAvailable)")}
-        if let subscriptionIdentifierAvailable = self.subscriptionIdentifierAvailable { pString.append("subscriptionIdentifierAvailable: \(subscriptionIdentifierAvailable)")}
-        if let sharedSubscriptionAvailable = self.sharedSubscriptionAvailable { pString.append("sharedSubscriptionAvailable: \(sharedSubscriptionAvailable)")}
-        if let serverKeepalive = self.serverKeepalive { pString.append("serverKeepalive: \(serverKeepalive)")}
-        if let responseInformation = self.responseInformation { pString.append("responseInformation: \(responseInformation)")}
-        if let serverReference = self.serverReference { pString.append("serverReference: \(serverReference)")}
-        if let authenticationMethod = self.authenticationMethod { pString.append("authenticationMethod: \(authenticationMethod)")}
-        if let authenticationData = self.authenticationData { pString.append("authenticationData: \(authenticationData)")}
-
-        return pString.joined(separator: ", ")
     }
 }
 

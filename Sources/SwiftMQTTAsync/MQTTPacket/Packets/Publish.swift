@@ -1,18 +1,96 @@
+public struct PublishProperties: Properties {
+    public var payloadFormatIndicator: Property?
+    public var messageExpiryInterval: Property?
+    public var topicAlias: Property?
+    public var responseTopic: Property?
+    public var correlationData: Property?
+    public var userProperties: [Property] = []
+    public var subscriptionIdentifier: Property?
+    public var contentType: Property?
+
+    internal var properties: [Property?] {
+        var p: [Property?] = []
+
+        p.append(payloadFormatIndicator)
+        p.append(messageExpiryInterval)
+        p.append(topicAlias)
+        p.append(responseTopic)
+        p.append(correlationData)
+        for property in userProperties { p.append(property)}
+        p.append(subscriptionIdentifier)
+        p.append(contentType)
+
+        return p
+    }
+}
+
+public extension PublishProperties {
+    init(
+        payloadFormatIndicator: Byte?,
+        messageExpiryInterval: UInt32?,
+        topicAlias: UInt16?,
+        responseTopic: String?,
+        correlationData: Bytes?,
+        userProperties: [(String, String)]?,
+        subscriptionIdentifier: UInt?,
+        contentType: String?,
+    ) {
+        if let payloadFormatIndicator { self.payloadFormatIndicator = Property.payloadFormatIndicator(payloadFormatIndicator)}
+        if let messageExpiryInterval { self.messageExpiryInterval = Property.messageExpiryInterval(messageExpiryInterval)}
+        if let topicAlias {self.topicAlias = Property.topicAlias(topicAlias)}
+        if let responseTopic {self.responseTopic = Property.responseTopic(responseTopic)}
+        if let correlationData {self.correlationData = Property.correlationData(correlationData)}
+        if let userProperties {
+            for (key, value) in userProperties { self.userProperties.append(Property.userProperty(key, value))}
+        }
+        if let subscriptionIdentifier {self.subscriptionIdentifier = Property.subscriptionIdentifier(subscriptionIdentifier)}
+        if let contentType { self.contentType = Property.contentType(contentType)}
+    }
+
+    init(from properties: [Property]) throws {
+        for property in properties {
+            switch property.identifier {
+                case .payloadFormatIndicator:
+                    try self.setProperty(&self.payloadFormatIndicator, property)
+                case .messageExpiryInterval:
+                    try self.setProperty(&self.messageExpiryInterval, property)
+                case .topicAlias:
+                    try self.setProperty(&self.topicAlias, property)
+                case .responseTopic:
+                    try self.setProperty(&self.responseTopic, property)
+                case .correlationData:
+                    try self.setProperty(&self.correlationData, property)
+                case .userProperty:
+                    self.userProperties.append(property)
+                case .subscriptionIdentifier:
+                    try self.setProperty(&self.subscriptionIdentifier, property)
+                case .contentType:
+                    try self.setProperty(&self.contentType, property)
+                default:
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectdProperty(inPacket: .DISCONNECT)))
+            }
+        }
+    }
+}
+
 public struct PublishVarHeader: Equatable, Sendable {
     public let topicName: String
     public let packetId: UInt16?
+    public let properties: PublishProperties?
 
-    public init(topicName: Bytes, packetId: UInt16?) throws {
+    public init(topicName: Bytes, packetId: UInt16?, properties: PublishProperties? = nil) throws {
         guard let t = String(bytes: topicName, encoding: .utf8) else {
             throw MQTTError.unexpectedError("Unable to decode topic name")
         }
         self.topicName = t
         self.packetId = packetId
+        self.properties = properties
     }
 
-    public init(topicName: String, packetId: UInt16?) {
+    public init(topicName: String, packetId: UInt16?, properties: PublishProperties? = nil) {
         self.topicName = topicName
         self.packetId = packetId
+        self.properties = properties
     }
 
     public func encode() -> Bytes {
