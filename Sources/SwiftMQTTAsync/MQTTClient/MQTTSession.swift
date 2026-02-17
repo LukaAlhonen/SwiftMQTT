@@ -204,18 +204,32 @@ extension MQTTSession {
 // MARK: receive handlers
 extension MQTTSession {
     private func handleConnack(_ connack: Connack) {
-        let returnCode = connack.varHeader.connectReturnCode
+        // v3
+        if let returnCode = connack.varHeader.connectReturnCode {
+            if case .ConnectionAccepted = returnCode {
+                guard let connackTask = self.connackTask else {
+                    self.commandBus.emit(.disconnect(MQTTError.unexpectedError("Connack timeoutTask should not be nil")))
+                    return
+                }
 
-        if case .ConnectionAccepted = returnCode {
-            guard let connackTask = self.connackTask else {
-                self.commandBus.emit(.disconnect(MQTTError.unexpectedError("Connack timeoutTask should not be nil")))
-                return
+                connackTask.stop()
+                self.connackTask = nil
+            } else {
+                self.commandBus.emit(.disconnect(MQTTError.connectionError(.rejected(reason: .returnCode(returnCode)))))
             }
+        // v5
+        } else if let reasonCode = connack.varHeader.connectReasonCode {
+            if case .success = reasonCode {
+                guard let connackTask = self.connackTask else {
+                    self.commandBus.emit(.disconnect(MQTTError.unexpectedError("Connack timeoutTask should not be nil")))
+                    return
+                }
 
-            connackTask.stop()
-            self.connackTask = nil
-        } else {
-            self.commandBus.emit(.disconnect(MQTTError.connectionError(.rejected(returnCode: returnCode))))
+                connackTask.stop()
+                self.connackTask = nil
+            } else {
+                self.commandBus.emit(.disconnect(MQTTError.connectionError(.rejected(reason: .reasonCode(reasonCode)))))
+            }
         }
     }
 

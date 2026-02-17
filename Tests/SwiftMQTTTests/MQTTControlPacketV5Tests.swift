@@ -67,8 +67,79 @@ import Testing
 }
 
 // MARK: Connack
+@Test("Create v5 connack packet") func createV5Connack() {
+    let connack = Connack(reasonCode: .success, sessionPresent: false, properties: ConnackProperties(
+        receiveMaximum: 20,
+        maximumPacketSize: 2000000,
+        topicAliasMaximum: 10,
+        )
+    )
+    #expect(connack.fixedHeader == FixedHeader(type: .CONNACK, flags: 0, remainingLength: 14))
+    #expect(
+        connack.varHeader
+            == ConnackVariableHeader(sessionPresent: 0, connectReasonCode: .success, connackProperties: ConnackProperties(
+                    receiveMaximum: 20,
+                    maximumPacketSize: 2000000,
+                    topicAliasMaximum: 10,
+                )
+            )
+    )
+}
+
+@Test("Decode v5 connack packet") func decodeV5Connack() {
+    let rawConnack: Bytes = [0x20, 0x0e, 0x00, 0x00, 0x0b, 0x22, 0x00, 0x0a, 0x27, 0x00, 0x1e, 0x84, 0x80, 0x21, 0x00, 0x14]
+    let connack = try! Connack(bytes: rawConnack)
+    let varHeader = ConnackVariableHeader(sessionPresent: 0, connectReasonCode: .success, connackProperties: ConnackProperties(
+            receiveMaximum: 20,
+            maximumPacketSize: 2000000,
+            topicAliasMaximum: 10,
+        )
+    )
+    #expect(connack.fixedHeader == FixedHeader(type: .CONNACK, flags: 0, remainingLength: 14))
+    #expect(connack.varHeader == varHeader)
+}
+
+@Test("Encode v5 connack packet") func encodeV5Connack() {
+    let connack = Connack(reasonCode: .success, sessionPresent: false, properties: ConnackProperties(
+        receiveMaximum: 20,
+        maximumPacketSize: 2000000,
+        topicAliasMaximum: 10,
+        )
+    )
+    let rawConnack: Bytes = [0x20, 0x0e, 0x00, 0x00, 0x0b, 0x21, 0x00, 0x14, 0x27, 0x00, 0x1e, 0x84, 0x80, 0x22, 0x00, 0x0a]
+    #expect(connack.encode() == rawConnack)
+}
 
 // MARK: Disconnect
+@Test("Create v5 disconnect packet") func createV5Disconnect() {
+    let disconnect = Disconnect(
+        reasonCode: .normalDisconnection,
+        properties: DisconnectProperties(
+            sessionExpiryInterval: 30
+        )
+    )
+    #expect(disconnect.fixedHeader == FixedHeader(type: .DISCONNECT, flags: 0, remainingLength: 7))
+    #expect(disconnect.variableHeader == DisconnectVariableHeader(
+            disconnectReasonCode: .normalDisconnection, properties: DisconnectProperties(sessionExpiryInterval: 30)
+        )
+    )
+}
+
+@Test("Decode v5 disconnect packet") func decodV5Disconnect() {
+    let bytes: Bytes = [0xe0, 0x07, 0x00, 0x05, 0x11, 0x00, 0x00, 0x00, 0x1e]
+    let disconnect = try! Disconnect(from: bytes)
+    #expect(disconnect.fixedHeader == FixedHeader(type: .DISCONNECT, flags: 0, remainingLength: 7))
+    #expect(disconnect.variableHeader == DisconnectVariableHeader(
+            disconnectReasonCode: .normalDisconnection, properties: DisconnectProperties(sessionExpiryInterval: 30)
+        )
+    )
+}
+
+@Test("Encode v5 disconnect packet") func encodeV5Disconnect() {
+    let bytes: Bytes = [0xe0, 0x07, 0x00, 0x05, 0x11, 0x00, 0x00, 0x00, 0x1e]
+    let disconnect = Disconnect(reasonCode: .normalDisconnection, properties: DisconnectProperties(sessionExpiryInterval: 30))
+    #expect(disconnect.encode() == bytes)
+}
 
 // MARK: Pingreq
 

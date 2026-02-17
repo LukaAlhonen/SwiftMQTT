@@ -6,9 +6,14 @@ enum MQTTError: Error, Equatable {
 }
 
 enum ConnectionError: Error, Equatable {
-    case rejected(returnCode: ConnectReturnCode)
+    case rejected(reason: ConnectionRejectedReason)
     case disconnected
     case ioFailure
+}
+
+enum ConnectionRejectedReason: Error, Equatable {
+    case returnCode(ConnectReturnCode)
+    case reasonCode(ConnectReasonCode)
 }
 
 enum ProtocolError: Error, Equatable {
@@ -22,11 +27,17 @@ enum MalformedPacketReason: Error, Equatable {
     case missingPacketId
     case invalidQoS
     case invalidRemainingLenght
-    case invalidType(expected: MQTTControlPacketType, actual: UInt8)
+    case invalidType(expected: MQTTControlPacketType, actual: Byte)
     case incorrectType(expected: MQTTControlPacketType, actual: MQTTControlPacketType)
-    case invalidFlags(expected: UInt8, actual: UInt8)
+    case invalidFlags(expected: Byte, actual: Byte)
     case invalidReturnCode
     case reservedBitModified
+    case incorrectdProperty(inPacket: MQTTControlPacketType)
+    case duplicateProperty
+    case malformedVariableByteInteger
+    case decodeError(String)
+    case invalidPropertyIdentifier
+    case malformedUTF8String
 }
 
 enum TimeoutKind: Error, Equatable {

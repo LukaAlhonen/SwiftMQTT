@@ -1,3 +1,5 @@
+import NIOCore
+
 public struct Property: Sendable, Equatable {
     public let identifier: PropertyIdentifier
     public let value: PropertyValue
@@ -95,6 +97,182 @@ public extension Property {
                 bytes.append(contentsOf: iBytes)
         }
         return bytes
+    }
+}
+
+public func decodeUTF8String(
+    from buffer: inout ByteBuffer,
+    bytesRead: inout Int
+) throws -> String {
+
+    guard let length = buffer.readInteger(endianness: .big, as: UInt16.self) else {
+        throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read two byte integer at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+    }
+
+    bytesRead += 2
+
+    guard let data = buffer.readBytes(length: Int(length)) else {
+        throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read byte sequence of length: \(length) at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+    }
+
+    bytesRead += Int(length)
+
+    guard let string = String(bytes: data, encoding: .utf8) else {
+        throw MQTTError.protocolViolation(.malformedPacket(reason: .malformedUTF8String))
+    }
+
+    return string
+}
+
+public extension Property {
+    static func decode(id: PropertyIdentifier, from buffer: inout ByteBuffer, bytesRead: inout Int) throws -> Property {
+        switch id {
+            case .payloadFormatIndicator:
+                guard let value = buffer.readInteger(as: Byte.self) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read byte at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+                }
+                bytesRead += 1
+                return Property.payloadFormatIndicator(value)
+            case .messageExpiryInterval:
+                guard let value = buffer.readInteger(endianness: .big, as: UInt32.self) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read four byte integer at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+                }
+                bytesRead += 4
+                return Property.messageExpiryInterval(value)
+            case .contentType:
+                let value = try decodeUTF8String(from: &buffer, bytesRead: &bytesRead)
+                return Property.contentType(value)
+            case .responseTopic:
+                let value = try decodeUTF8String(from: &buffer, bytesRead: &bytesRead)
+                return Property.responseTopic(value)
+            case .correlationData:
+                guard let length = buffer.readInteger(endianness: .big, as: UInt16.self) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read two byte integer at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+                }
+                bytesRead += 2
+                guard let data = buffer.readBytes(length: Int(length)) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read byte sequence of length: \(length) at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+                }
+                bytesRead += Int(length)
+                return Property.correlationData(data)
+            case .subscriptionIdentifier:
+                let value = try decodeUInt(from: &buffer, bytesRead: &bytesRead)
+                return Property.subscriptionIdentifier(value)
+            case .sessionExpiryInterval:
+                guard let value = buffer.readInteger(endianness: .big, as: UInt32.self) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read four byte integer at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+                }
+                bytesRead += 4
+                return Property.sessionExpiryInterval(value)
+            case .assignedClientIdentifier:
+                let value = try decodeUTF8String(from: &buffer, bytesRead: &bytesRead)
+                return Property.assignedClientIdentifier(value)
+            case .serverKeepalive:
+                guard let value = buffer.readInteger(endianness: .big, as: UInt16.self) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read two byte integer at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+                }
+                bytesRead += 2
+                return Property.serverKeepalive(value)
+            case .authenticationMethod:
+                let value = try decodeUTF8String(from: &buffer, bytesRead: &bytesRead)
+                return Property.authenticationMethod(value)
+            case .authenticationData:
+                guard let length = buffer.readInteger(endianness: .big, as: UInt16.self) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read two byte integer at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+                }
+                bytesRead += 2
+                guard let value = buffer.readBytes(length: Int(length)) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read byte sequence of length: \(length) at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+                }
+                bytesRead += Int(length)
+
+                return Property.authenticationData(value)
+            case .requestProblemInformation:
+                guard let value = buffer.readInteger(as: Byte.self) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read byte at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+                }
+                bytesRead += 1
+                return Property.requestProblemInformation(value)
+            case .willDelayInterval:
+                guard let value = buffer.readInteger(endianness: .big, as: UInt32.self) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read four byte integer at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+                }
+                bytesRead += 4
+                return Property.willDelayInterval(value)
+            case .requestResponseInformation:
+                guard let value = buffer.readInteger(as: Byte.self) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read byte at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+                }
+                bytesRead += 1
+                return Property.requestResponseInformation(value)
+            case .responseInformation:
+                let value = try decodeUTF8String(from: &buffer, bytesRead: &bytesRead)
+                return Property.responseInformation(value)
+            case .serverReference:
+                let value = try decodeUTF8String(from: &buffer, bytesRead: &bytesRead)
+                return Property.serverReference(value)
+            case .reasonString:
+                let value = try decodeUTF8String(from: &buffer, bytesRead: &bytesRead)
+                return Property.reasonString(value)
+            case .receiveMaximum:
+                guard let value = buffer.readInteger(endianness: .big, as: UInt16.self) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read two byte integer at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+                }
+                bytesRead += 2
+                return receiveMaximum(value)
+            case .topicAliasMaximum:
+                guard let value = buffer.readInteger(endianness: .big, as: UInt16.self) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read two byte integer at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+                }
+                bytesRead += 2
+                return Property.topicAliasMaximum(value)
+            case .topicAlias:
+                guard let value = buffer.readInteger(endianness: .big, as: UInt16.self) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read two byte integer at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+                }
+                bytesRead += 2
+                return Property.topicAlias(value)
+            case .maximumQoS:
+                guard let value = buffer.readInteger(as: Byte.self) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read byte at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+                }
+                bytesRead += 1
+                return Property.maximumQoS(value)
+            case .retainAvailable:
+                guard let value = buffer.readInteger(as: Byte.self) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read byte at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+                }
+                bytesRead += 1
+                return Property.retainAvailable(value)
+            case .userProperty:
+                let key = try decodeUTF8String(from: &buffer, bytesRead: &bytesRead)
+                let value = try decodeUTF8String(from: &buffer, bytesRead: &bytesRead)
+                return Property.userProperty(key, value)
+            case .maximumPacketSize:
+                guard let value = buffer.readInteger(endianness: .big, as: UInt32.self) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read four byte integer at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+                }
+                bytesRead += 4
+                return Property.maximumPacketSize(value)
+            case .wildcardSubscriptionAvailable:
+                guard let value = buffer.readInteger(as: Byte.self) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read byte at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+                }
+                bytesRead += 1
+                return Property.wildcardSubscriptionAvailable(value)
+            case .subscriptionIdentifierAvailable:
+                guard let value = buffer.readInteger(as: Byte.self) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read byte at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+                }
+                bytesRead += 1
+                return Property.subscriptionIdentifierAvailable(value)
+            case .sharedSubscriptionAvailable:
+                guard let value = buffer.readInteger(as: Byte.self) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read byte at index: \(buffer.readerIndex), from buffer: \(buffer.debugDescription)")))
+                }
+                bytesRead += 1
+                return Property.sharedSubscriptionAvailable(value)
+        }
     }
 }
 
