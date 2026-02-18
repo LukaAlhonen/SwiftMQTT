@@ -26,7 +26,7 @@ enum ProtocolError: Error, Equatable {
 enum MalformedPacketReason: Error, Equatable {
     case missingPacketId
     case invalidQoS
-    case invalidRemainingLenght
+    case invalidRemainingLength
     case invalidType(expected: MQTTControlPacketType, actual: Byte)
     case incorrectType(expected: MQTTControlPacketType, actual: MQTTControlPacketType)
     case invalidFlags(expected: Byte, actual: Byte)

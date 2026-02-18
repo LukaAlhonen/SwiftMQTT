@@ -146,6 +146,12 @@ import Testing
 // MARK: Pingresp
 
 // MARK: Puback
+// @Test("Create v5 puback packet") func createV5Puback() {
+//     let props = PubackProperties(reasonString: "hello", userProperties: [("key", "value")])
+//     let puback = Puback(packetId: 1, reasonCode: .success, properties: props)
+
+//     #expect(puback.fixedHeader == FixedHeader(type: .PUBACK, flags: 0, remainingLength: ))
+// }
 
 // MARK: Pubcomp
 

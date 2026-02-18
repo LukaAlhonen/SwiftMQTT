@@ -236,7 +236,7 @@ public struct Disconnect: MQTTControlPacket {
                 self.variableHeader = try .init(disconnectReasonCode: reasonCode, properties: .init(from: properties))
             case .v3:
                 if remaining.count > 0 {
-                    throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidRemainingLenght))
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidRemainingLength))
                 }
         }
     }
