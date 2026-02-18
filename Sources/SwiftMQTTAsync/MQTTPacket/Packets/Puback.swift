@@ -12,27 +12,27 @@ public enum PubackReasonCode: Byte, Equatable, Sendable {
     case payloadFormatInvalid = 0x99
 }
 
-public extension PubackReasonCode {
-    func toString() -> String {
+extension PubackReasonCode {
+    public func toString() -> String {
         switch self {
-            case .success:
-                "SUCCESS"
-            case .noMatchingSubscribers:
-                "NO MATCHING SUBSCRIBERS"
-            case .unspecifiedError:
-                "UNSPECIFIED ERROR"
-            case .implementationSpecificError:
-                "IMPLEMENTATION SPECIFIC ERROR"
-            case .notAuthorized:
-                "NOT AUTHORIZED"
-            case .topicNameInvalid:
-                "TOPIC NAME INVALID"
-            case .packetIdentifierInUse:
-                "PACKET IDENTIFIER IN USE"
-            case .quotaExceeded:
-                "QUOTA EXCEEDED"
-            case .payloadFormatInvalid:
-                "PAYLOAD FORMAT INVALID"
+        case .success:
+            "SUCCESS"
+        case .noMatchingSubscribers:
+            "NO MATCHING SUBSCRIBERS"
+        case .unspecifiedError:
+            "UNSPECIFIED ERROR"
+        case .implementationSpecificError:
+            "IMPLEMENTATION SPECIFIC ERROR"
+        case .notAuthorized:
+            "NOT AUTHORIZED"
+        case .topicNameInvalid:
+            "TOPIC NAME INVALID"
+        case .packetIdentifierInUse:
+            "PACKET IDENTIFIER IN USE"
+        case .quotaExceeded:
+            "QUOTA EXCEEDED"
+        case .payloadFormatInvalid:
+            "PAYLOAD FORMAT INVALID"
         }
     }
 }
@@ -49,9 +49,9 @@ public struct PubackProperties: Properties {
     }
 }
 
-public extension PubackProperties {
-    init(reasonString: String? = nil, userProperties: [(String, String)]? = nil) {
-        if let reasonString { self.reasonString = Property.reasonString(reasonString)}
+extension PubackProperties {
+    public init(reasonString: String? = nil, userProperties: [(String, String)]? = nil) {
+        if let reasonString { self.reasonString = Property.reasonString(reasonString) }
         if let userProperties {
             for (key, value) in userProperties {
                 self.userProperties.append(Property.userProperty(key, value))
@@ -59,15 +59,16 @@ public extension PubackProperties {
         }
     }
 
-    init(from properties: [Property]) throws {
+    public init(from properties: [Property]) throws {
         for property in properties {
             switch property.identifier {
-                case .reasonString:
-                    try self.setProperty(&self.reasonString, property)
-                case .userProperty:
-                    self.userProperties.append(property)
-                default:
-                    throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectdProperty(inPacket: .PUBACK)))
+            case .reasonString:
+                try self.setProperty(&self.reasonString, property)
+            case .userProperty:
+                self.userProperties.append(property)
+            default:
+                throw MQTTError.protocolViolation(
+                    .malformedPacket(reason: .incorrectdProperty(inPacket: .PUBACK)))
             }
         }
     }
@@ -78,7 +79,9 @@ public struct PubackVarableHeader: Equatable, Sendable {
     public var reasonCode: PubackReasonCode?
     public var properties: PubackProperties?
 
-    public init(packetId: UInt16, reasonCode: PubackReasonCode? = nil, properties: PubackProperties? = nil) {
+    public init(
+        packetId: UInt16, reasonCode: PubackReasonCode? = nil, properties: PubackProperties? = nil
+    ) {
         self.packetId = packetId
         self.reasonCode = reasonCode
         self.properties = properties
@@ -96,8 +99,8 @@ public struct PubackVarableHeader: Equatable, Sendable {
         var s: String = ""
 
         s.append("Packet ID: \(self.packetId)")
-        if let reasonCode { s.append("Reason code: \(reasonCode.toString())")}
-        if let properties { s.append("Properties: \(properties.toString())")}
+        if let reasonCode { s.append("Reason code: \(reasonCode.toString())") }
+        if let properties { s.append("Properties: \(properties.toString())") }
 
         return s
     }
@@ -109,9 +112,12 @@ public struct Puback: MQTTControlPacket {
 }
 
 extension Puback {
-    public init(packetId: UInt16, reasonCode: PubackReasonCode? = nil, properties: PubackProperties? = nil) {
-        self.fixedHeader = .init(type: .PUBACK, flags: 0, remainingLength: 2)
+    public init(
+        packetId: UInt16, reasonCode: PubackReasonCode? = nil, properties: PubackProperties? = nil
+    ) {
         self.varHeader = .init(packetId: packetId, reasonCode: reasonCode, properties: properties)
+        self.fixedHeader = .init(
+            type: .PUBACK, flags: 0, remainingLength: UInt(self.varHeader.encode().count))
     }
 
     public init(bytes: Bytes, version: Version) throws {
@@ -143,41 +149,50 @@ extension Puback {
         var pubackProperties: PubackProperties? = nil
 
         switch version {
-            case .v3:
-                if remaining.count > 0 { throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidRemainingLength))}
-            case .v5:
-                if msgLen > 2 {
-                    // Decode reason code
-                    guard let reasonCode: PubackReasonCode = PubackReasonCode(rawValue: remaining[0]) else {
-                        throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidReturnCode))
-                    }
-                    pubackReasonCode = reasonCode
-
-                    // Decode properties
-                    var properties: [Property] = []
-                    let propslen = try decodeRemainigLength(Bytes(remaining[1..<remaining.count]))
-                    let props = Bytes(remaining[propslen.length + 2..<2+Int(propslen.value)])
-                    var buf = ByteBuffer(bytes: props)
-                    var bytesRead = 0
-                    while bytesRead < propslen.value {
-                        guard let idByte: Byte = buf.readInteger(as: Byte.self) else {
-                            throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read byte at index: \(buf.readerIndex), from buffer: \(buf.debugDescription)")))
-                        }
-                        bytesRead += 1
-                        guard let id = PropertyIdentifier(rawValue: idByte) else {
-                            throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidPropertyIdentifier))
-                        }
-                        let property = try Property.decode(id: id, from: &buf, bytesRead: &bytesRead)
-                        properties.append(property)
-                    }
-                    pubackProperties = try .init(from: properties)
-                } else {
-                    pubackReasonCode = .success
+        case .v3:
+            if remaining.count > 0 {
+                throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidRemainingLength))
+            }
+        case .v5:
+            if msgLen > 2 {
+                // Decode reason code
+                guard let reasonCode: PubackReasonCode = PubackReasonCode(rawValue: remaining[0])
+                else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidReturnCode))
                 }
+                pubackReasonCode = reasonCode
+
+                // Decode properties
+                var properties: [Property] = []
+                let propslen = try decodeRemainigLength(Bytes(remaining[1..<remaining.count]))
+                let props = Bytes(remaining[propslen.length + 2..<2 + Int(propslen.value)])
+                var buf = ByteBuffer(bytes: props)
+                var bytesRead = 0
+                while bytesRead < propslen.value {
+                    guard let idByte: Byte = buf.readInteger(as: Byte.self) else {
+                        throw MQTTError.protocolViolation(
+                            .malformedPacket(
+                                reason: .decodeError(
+                                    "Unable to read byte at index: \(buf.readerIndex), from buffer: \(buf.debugDescription)"
+                                )))
+                    }
+                    bytesRead += 1
+                    guard let id = PropertyIdentifier(rawValue: idByte) else {
+                        throw MQTTError.protocolViolation(
+                            .malformedPacket(reason: .invalidPropertyIdentifier))
+                    }
+                    let property = try Property.decode(id: id, from: &buf, bytesRead: &bytesRead)
+                    properties.append(property)
+                }
+                pubackProperties = try .init(from: properties)
+            } else {
+                pubackReasonCode = .success
+            }
         }
 
         self.fixedHeader = .init(type: type, flags: flags, remainingLength: UInt(msgLen))
-        self.varHeader = .init(packetId: packetId, reasonCode: pubackReasonCode, properties: pubackProperties)
+        self.varHeader = .init(
+            packetId: packetId, reasonCode: pubackReasonCode, properties: pubackProperties)
     }
 }
 
