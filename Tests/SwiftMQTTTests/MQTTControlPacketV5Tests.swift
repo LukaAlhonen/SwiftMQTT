@@ -88,7 +88,7 @@ import Testing
 
 @Test("Decode v5 connack packet") func decodeV5Connack() {
     let rawConnack: Bytes = [0x20, 0x0e, 0x00, 0x00, 0x0b, 0x22, 0x00, 0x0a, 0x27, 0x00, 0x1e, 0x84, 0x80, 0x21, 0x00, 0x14]
-    let connack = try! Connack(bytes: rawConnack)
+    let connack = try! Connack(bytes: rawConnack, version: .v5)
     let varHeader = ConnackVariableHeader(sessionPresent: 0, connectReasonCode: .success, connackProperties: ConnackProperties(
             receiveMaximum: 20,
             maximumPacketSize: 2000000,
@@ -127,7 +127,7 @@ import Testing
 
 @Test("Decode v5 disconnect packet") func decodV5Disconnect() {
     let bytes: Bytes = [0xe0, 0x07, 0x00, 0x05, 0x11, 0x00, 0x00, 0x00, 0x1e]
-    let disconnect = try! Disconnect(from: bytes)
+    let disconnect = try! Disconnect(bytes: bytes, version: .v5)
     #expect(disconnect.fixedHeader == FixedHeader(type: .DISCONNECT, flags: 0, remainingLength: 7))
     #expect(disconnect.variableHeader == DisconnectVariableHeader(
             disconnectReasonCode: .normalDisconnection, properties: DisconnectProperties(sessionExpiryInterval: 30)
@@ -150,6 +150,105 @@ import Testing
 // MARK: Pubcomp
 
 // MARK: Publish
+@Test("Create QoS 0 v5 publish packet") func createV5PublishQoS0() {
+    let props: PublishProperties = .init(
+        payloadFormatIndicator: 1,
+        messageExpiryInterval: 30,
+        contentType: "text/plain"
+    )
+    let publish = try! Publish(topicName: "test", message: "hello", qos: .AtMostOnce, properties: props)
+
+    #expect(publish.fixedHeader == FixedHeader(type: .PUBLISH, flags: 0, remainingLength: 32))
+    #expect(publish.variableHeader == PublishVarHeader(topicName: "test", properties: props))
+}
+
+@Test("Create QoS 1 v5 publish packet") func createV5PublishQoS1() {
+    let props: PublishProperties = .init(
+        payloadFormatIndicator: 1,
+        messageExpiryInterval: 30,
+        contentType: "text/plain"
+    )
+    let publish = try! Publish(topicName: "test", message: "hello", packetId: 1, qos: .AtLeastOnce, properties: props)
+
+    #expect(publish.fixedHeader == FixedHeader(type: .PUBLISH, flags: 2, remainingLength: 34))
+    #expect(publish.variableHeader == PublishVarHeader(topicName: "test", packetId: 1, properties: props))
+}
+
+@Test("Decode QoS 0 v5 publish packet") func decodeV5PublishQoS0() {
+    let bytes: Bytes = [
+        0x30, 0x20, 0x00, 0x04, 0x74, 0x65, 0x73, 0x74, 0x14,
+        0x01, 0x01, 0x02, 0x00, 0x00, 0x00, 0x1e, 0x03, 0x00,
+        0x0a, 0x74, 0x65, 0x78, 0x74, 0x2f, 0x70, 0x6c, 0x61,
+        0x69, 0x6e, 0x68, 0x65, 0x6c, 0x6c, 0x6f
+    ]
+
+    let publish = try! Publish(bytes: bytes, version: .v5)
+
+    let varHeader = PublishVarHeader(
+        topicName: "test", properties: PublishProperties(
+            payloadFormatIndicator: 1,
+            messageExpiryInterval: 30,
+            contentType: "text/plain"
+        )
+    )
+
+    #expect(publish.fixedHeader == FixedHeader(type: .PUBLISH, flags: 0, remainingLength: 32))
+    #expect(publish.variableHeader == varHeader)
+}
+
+@Test("Decode QoS 1 v5 publish packet") func decodeV5PublishQoS1() {
+    let bytes: Bytes = [
+        0x32, 0x22, 0x00, 0x04, 0x74, 0x65, 0x73, 0x74, 0x00, 0x01, 0x14, 0x01, 0x01, 0x02, 0x00, 0x00,
+        0x00, 0x1e, 0x03, 0x00, 0x0a, 0x74, 0x65, 0x78, 0x74, 0x2f, 0x70, 0x6c, 0x61, 0x69, 0x6e, 0x68,
+        0x65, 0x6c, 0x6c, 0x6f
+    ]
+
+    let publish = try! Publish(bytes: bytes, version: .v5)
+
+    let varHeader = PublishVarHeader(
+        topicName: "test", packetId: 1, properties: PublishProperties(
+            payloadFormatIndicator: 1,
+            messageExpiryInterval: 30,
+            contentType: "text/plain"
+        )
+    )
+
+    #expect(publish.fixedHeader == FixedHeader(type: .PUBLISH, flags: 2, remainingLength: 34))
+    #expect(publish.variableHeader == varHeader)
+}
+
+@Test("Encode QoS 0 v5 publish packet") func encodeV5PublishQoS0() {
+    let bytes: Bytes = [
+        0x30, 0x20, 0x00, 0x04, 0x74, 0x65, 0x73, 0x74, 0x14,
+        0x01, 0x01, 0x02, 0x00, 0x00, 0x00, 0x1e, 0x03, 0x00,
+        0x0a, 0x74, 0x65, 0x78, 0x74, 0x2f, 0x70, 0x6c, 0x61,
+        0x69, 0x6e, 0x68, 0x65, 0x6c, 0x6c, 0x6f
+    ]
+    let props: PublishProperties = .init(
+        payloadFormatIndicator: 1,
+        messageExpiryInterval: 30,
+        contentType: "text/plain"
+    )
+    let publish = try! Publish(topicName: "test", message: "hello", qos: .AtMostOnce, properties: props)
+
+    #expect(publish.encode() == bytes)
+}
+
+@Test("Encode QoS 1 v5 publish packet") func encodeV5PublishQoS1() {
+    let bytes: Bytes = [
+        0x32, 0x22, 0x00, 0x04, 0x74, 0x65, 0x73, 0x74, 0x00, 0x01, 0x14, 0x01, 0x01, 0x02, 0x00, 0x00,
+        0x00, 0x1e, 0x03, 0x00, 0x0a, 0x74, 0x65, 0x78, 0x74, 0x2f, 0x70, 0x6c, 0x61, 0x69, 0x6e, 0x68,
+        0x65, 0x6c, 0x6c, 0x6f
+    ]
+    let props: PublishProperties = .init(
+        payloadFormatIndicator: 1,
+        messageExpiryInterval: 30,
+        contentType: "text/plain"
+    )
+    let publish = try! Publish(topicName: "test", message: "hello", packetId: 1, qos: .AtLeastOnce, properties: props)
+
+    #expect(publish.encode() == bytes)
+}
 
 // MARK: Pubrec
 

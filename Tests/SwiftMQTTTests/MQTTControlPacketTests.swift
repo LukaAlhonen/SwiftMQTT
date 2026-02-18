@@ -13,7 +13,7 @@ import Testing
 
 @Test("Decode Connack Packet") func decodeConnackPacket() {
     let rawConnack: Bytes = [0x20, 0x02, 0x00, 0x00]
-    let connackPacket = try! Connack(bytes: rawConnack)
+    let connackPacket = try! Connack(bytes: rawConnack, version: .v3)
     #expect(connackPacket.fixedHeader == FixedHeader(type: .CONNACK, flags: 0, remainingLength: 2))
     #expect(
         connackPacket.varHeader
@@ -22,7 +22,7 @@ import Testing
 
 @Test("Encode Connack Packet") func encodeConnackPacket() {
     let rawConnack: Bytes = [0x20, 0x02, 0x00, 0x00]
-    let connackPacket = try! Connack(bytes: rawConnack)
+    let connackPacket = try! Connack(bytes: rawConnack, version: .v3)
 
     #expect(connackPacket.fixedHeader.encode() == [0x20, 0x02])
     #expect(connackPacket.varHeader.encode() == [0x00, 0x00])
@@ -56,11 +56,11 @@ import Testing
         0x30, 0x11, 0x00, 0x0a, 0x74, 0x65, 0x73, 0x74, 0x2f, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x68,
         0x65, 0x6c, 0x6c, 0x6f,
     ]
-    let publishPacket = try! Publish(bytes: rawPublish)
+    let publishPacket = try! Publish(bytes: rawPublish, version: .v3)
 
     #expect(publishPacket.fixedHeader == FixedHeader(type: .PUBLISH, flags: 0, remainingLength: 17))
-    #expect(publishPacket.varHeader.packetId == nil)
-    #expect(publishPacket.varHeader.topicName == "test/topic")
+    #expect(publishPacket.variableHeader.packetId == nil)
+    #expect(publishPacket.variableHeader.topicName == "test/topic")
     #expect(publishPacket.payload.content == [0x68, 0x65, 0x6c, 0x6c, 0x6f])
     #expect(publishPacket.payload.toString() == "Payload: hello")
     #expect(publishPacket.qos == .AtMostOnce)
@@ -69,7 +69,7 @@ import Testing
 }
 
 @Test("Create Publish Packet with string message") func createPublishStringMessage() {
-    let publish = Publish(topicName: "test/topic", message: "hello", qos: .AtMostOnce)
+    let publish = try! Publish(topicName: "test/topic", message: "hello", qos: .AtMostOnce)
     let rawPublish: Bytes = [
         0x30, 0x11, 0x00, 0x0a, 0x74, 0x65, 0x73, 0x74, 0x2f, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x68,
         0x65, 0x6c, 0x6c, 0x6f,
@@ -79,7 +79,7 @@ import Testing
 }
 
 @Test("Create Publish Packet with byte message") func createPublishByteMessage() {
-    let publish = Publish(
+    let publish = try! Publish(
         topicName: "test/topic", message: Bytes("hello".utf8), qos: .AtMostOnce)
     let rawPublish: Bytes = [
         0x30, 0x11, 0x00, 0x0a, 0x74, 0x65, 0x73, 0x74, 0x2f, 0x74, 0x6f, 0x70, 0x69, 0x63, 0x68,
@@ -98,7 +98,7 @@ import Testing
 
 @Test("Decode Puback") func decodePuback() {
     let bytes: Bytes = [0x40, 0x02, 0x00, 0x01]
-    let puback = try! Puback(bytes: bytes)
+    let puback = try! Puback(bytes: bytes, version: .v3)
     #expect(puback == Puback(packetId: 1))
 }
 
@@ -117,7 +117,7 @@ import Testing
 
 @Test("Decode pubrec") func decodePubrec() {
     let bytes: Bytes = [0x50, 0x02, 0x00, 0x01]
-    let pubrec = try! Pubrec(bytes: bytes)
+    let pubrec = try! Pubrec(bytes: bytes, version: .v3)
     #expect(pubrec == Pubrec(packetId: 1))
 }
 
@@ -136,7 +136,7 @@ import Testing
 
 @Test("Decode pubrel") func decodePubrel() {
     let bytes: Bytes = [0x62, 0x02, 0x00, 0x01]
-    let pubrel = try! Pubrel(bytes: bytes)
+    let pubrel = try! Pubrel(bytes: bytes, version: .v3)
     #expect(pubrel == Pubrel(packetId: 1))
 }
 
@@ -155,7 +155,7 @@ import Testing
 
 @Test("Decode pubcomp") func decodePubcomp() {
     let bytes: Bytes = [0x70, 0x02, 0x00, 0x01]
-    let pubcomp = try! Pubcomp(bytes: bytes)
+    let pubcomp = try! Pubcomp(bytes: bytes, version: .v3)
     #expect(pubcomp == Pubcomp(packetId: 1))
 }
 
@@ -198,7 +198,7 @@ import Testing
 
 @Test("Decode suback") func decodeSuback() {
     let bytes: Bytes = [0x90, 0x05, 0x00, 0x01, 0x00, 0x01, 0x02]
-    let suback = try! Suback(bytes: bytes)
+    let suback = try! Suback(bytes: bytes, version: .v3)
     #expect(suback == Suback(packetId: 1, returnCodes: [.QoS0, .QoS1, .QoS2]))
 }
 
@@ -233,7 +233,7 @@ import Testing
 
 @Test("Decode unsuback") func decodeUnsuback() {
     let bytes: Bytes = [0xb0, 0x02, 0x00, 0x01]
-    let unsuback = try! Unsuback(bytes: bytes)
+    let unsuback = try! Unsuback(bytes: bytes, version: .v3)
     #expect(unsuback == Unsuback(packetId: 1))
 }
 

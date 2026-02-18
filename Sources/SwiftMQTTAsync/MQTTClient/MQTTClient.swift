@@ -40,7 +40,7 @@ actor MQTTClient {
         self.internalCommandBus = MQTTEventBus<MQTTInternalCommand>(continuation: internalCommandCont )
 
         self.session = MQTTSession(config: config, eventBus: eventBus, commandBus: internalCommandBus)
-        self.connection = MQTTConnection(host: host, port: port, eventBus: internalEventBus)
+        self.connection = MQTTConnection(host: host, port: port, eventBus: internalEventBus, version: self.version)
 
         self.idAllocator = .init()
 
@@ -113,11 +113,11 @@ extension MQTTClient {
     @discardableResult func publish(bytes: Bytes, qos: QoS, topic: String) async throws -> Publish{
         let publish = switch qos {
             case .ExactlyOnce:
-                await constructQoS2Publish(bytes: bytes, topic: topic)
+                try await constructQoS2Publish(bytes: bytes, topic: topic)
             case .AtLeastOnce:
-                await constructQoS1Publish(bytes: bytes, topic: topic)
+                try await constructQoS1Publish(bytes: bytes, topic: topic)
             case .AtMostOnce:
-                constructQoS0Publish(bytes: bytes, topic: topic)
+                try constructQoS0Publish(bytes: bytes, topic: topic)
         }
 
         try await self.sendPublish(publish, qos: qos)
@@ -128,11 +128,11 @@ extension MQTTClient {
     @discardableResult func publish(message: String, qos: QoS, topic: String) async throws -> Publish{
         let publish = switch qos {
             case .ExactlyOnce:
-                await constructQoS2Publish(bytes: Bytes(message.utf8), topic: topic)
+                try await constructQoS2Publish(bytes: Bytes(message.utf8), topic: topic)
             case .AtLeastOnce:
-                await constructQoS1Publish(bytes: Bytes(message.utf8), topic: topic)
+                try await constructQoS1Publish(bytes: Bytes(message.utf8), topic: topic)
             case .AtMostOnce:
-                constructQoS0Publish(bytes: Bytes(message.utf8), topic: topic)
+                try constructQoS0Publish(bytes: Bytes(message.utf8), topic: topic)
         }
 
         try await self.sendPublish(publish, qos: qos)
@@ -144,14 +144,14 @@ extension MQTTClient {
         try await self.send(publish)
         switch qos {
             case .ExactlyOnce:
-                guard let packetId = publish.varHeader.packetId else {
+                guard let packetId = publish.variableHeader.packetId else {
                     throw MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))
                 }
                 try await self.session.awaitPubrec(packetId: packetId)
                 try await self.send(Pubrel(packetId: packetId))
                 try await self.session.awaitPubComp(packetId: packetId)
             case .AtLeastOnce:
-                guard let packetId = publish.varHeader.packetId else {
+                guard let packetId = publish.variableHeader.packetId else {
                     throw MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))
                 }
                 try await session.awaitPuback(packetId: packetId)
@@ -160,22 +160,22 @@ extension MQTTClient {
         }
     }
 
-    private func constructQoS2Publish(bytes: Bytes, topic: String) async -> Publish {
+    private func constructQoS2Publish(bytes: Bytes, topic: String) async throws -> Publish {
         let packetId = await self.idAllocator.next()
-        let publish = Publish(topicName: topic, message: bytes, packetId: packetId, qos: .ExactlyOnce)
+        let publish = try Publish(topicName: topic, message: bytes, packetId: packetId, qos: .ExactlyOnce)
 
         return publish
     }
 
-    private func constructQoS1Publish(bytes: Bytes, topic: String) async -> Publish {
+    private func constructQoS1Publish(bytes: Bytes, topic: String) async throws -> Publish {
         let packetId = await self.idAllocator.next()
-        let publish = Publish(topicName: topic, message: bytes, packetId: packetId, qos: .AtLeastOnce)
+        let publish = try Publish(topicName: topic, message: bytes, packetId: packetId, qos: .AtLeastOnce)
 
         return publish
     }
 
-    private func constructQoS0Publish(bytes: Bytes, topic: String) -> Publish {
-        let publish = Publish(topicName: topic, message: bytes, qos: .AtMostOnce)
+    private func constructQoS0Publish(bytes: Bytes, topic: String) throws -> Publish {
+        let publish = try Publish(topicName: topic, message: bytes, qos: .AtMostOnce)
 
         return publish
     }

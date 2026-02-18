@@ -117,7 +117,7 @@ extension MQTTSession {
         switch publish.qos {
             // QoS 2
             case .ExactlyOnce:
-                guard let packetId = publish.varHeader.packetId else {
+                guard let packetId = publish.variableHeader.packetId else {
                     self.commandBus.emit(.disconnect(MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))))
                     return
                 }
@@ -126,7 +126,7 @@ extension MQTTSession {
                 timeoutTask.start()
                 self.activeTasks[packetId] = InflightTask(state: .publishQoS2(.publishSent), timeout: timeoutTask)
             case .AtLeastOnce:
-                guard let packetId = publish.varHeader.packetId else {
+                guard let packetId = publish.variableHeader.packetId else {
                     self.commandBus.emit(.disconnect(MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))))
                     return
                 }
@@ -255,14 +255,14 @@ extension MQTTSession {
     private func handlePublish(_ publish: Publish) {
         switch publish.qos {
             case .ExactlyOnce:
-                guard let packetId = publish.varHeader.packetId else {
+                guard let packetId = publish.variableHeader.packetId else {
                     self.commandBus.emit(.disconnect(MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))))
                     return
                 }
                 self.commandBus.emit(.send(Pubrec(packetId: packetId)))
                 self.passiveTasks.insert(packetId)
             case .AtLeastOnce:
-                guard let packetId = publish.varHeader.packetId else {
+                guard let packetId = publish.variableHeader.packetId else {
                     self.commandBus.emit(.disconnect(MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))))
                     return
                 }

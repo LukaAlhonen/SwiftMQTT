@@ -1,3 +1,51 @@
+public enum PubackReasonCode: Byte, Equatable, Sendable {
+    case success = 0x00
+    case noMatchingSubscribers = 0x10
+    case unspecifiedError = 0x80
+    case implementationSpecificError = 0x83
+    case notAuthorized = 0x87
+    case topicNameInvalid = 0x90
+    case packetIdentifierInUse = 0x91
+    case quotaExceeded = 0x97
+    case payloadFormatInvalid = 0x99
+}
+
+public struct PubackProperties: Properties {
+    public var reasonString: Property?
+    public var userProperties: [Property] = []
+
+    internal var properties: [Property?] {
+        var p: [Property?] = []
+        p.append(self.reasonString)
+        for property in self.userProperties { p.append(property) }
+        return p
+    }
+}
+
+public extension PubackProperties {
+    init(reasonString: String? = nil, userProperties: [(String, String)]? = nil) {
+        if let reasonString { self.reasonString = Property.reasonString(reasonString)}
+        if let userProperties {
+            for (key, value) in userProperties {
+                self.userProperties.append(Property.userProperty(key, value))
+            }
+        }
+    }
+
+    init(from properties: [Property]) throws {
+        for property in properties {
+            switch property.identifier {
+                case .reasonString:
+                    try self.setProperty(&self.reasonString, property)
+                case .userProperty:
+                    self.userProperties.append(property)
+                default:
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectdProperty(inPacket: .PUBACK)))
+            }
+        }
+    }
+}
+
 public struct PubackVarableHeader: Equatable, Sendable {
     let packetId: UInt16
 
@@ -25,7 +73,7 @@ extension Puback {
         self.varHeader = .init(packetId: packetId)
     }
 
-    public init(bytes: Bytes) throws {
+    public init(bytes: Bytes, version: Version) throws {
         let typeBytes = bytes[0] >> 4
         guard let type = MQTTControlPacketType(rawValue: typeBytes) else {
             throw MQTTError.protocolViolation(

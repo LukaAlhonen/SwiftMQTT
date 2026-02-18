@@ -140,7 +140,7 @@ public struct WillProperties: Properties {
                 case .userProperty:
                     self.userProperties.append(property)
                 default:
-                    throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectdProperty(inPacket: .CONNACK)))
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectdProperty(inPacket: .CONNECT)))
             }
         }
     }

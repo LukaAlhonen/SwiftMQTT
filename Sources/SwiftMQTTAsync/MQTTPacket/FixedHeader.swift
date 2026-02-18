@@ -17,7 +17,7 @@ public struct FixedHeader: Equatable, Sendable {
     }
 }
 
-public enum MQTTControlPacketType: UInt8, Sendable {
+public enum MQTTControlPacketType: Byte, Sendable {
     case CONNECT = 1
     case CONNACK = 2
     case PUBLISH = 3

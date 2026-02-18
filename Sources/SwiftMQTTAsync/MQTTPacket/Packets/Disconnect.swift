@@ -185,7 +185,7 @@ public struct Disconnect: MQTTControlPacket {
         self.variableHeader = varHeader
     }
 
-    public init(from bytes: Bytes) throws {
+    public init(bytes: Bytes, version: Version) throws {
         let typeBits: Byte = bytes[0] >> 4
         guard let type = MQTTControlPacketType(rawValue: typeBits) else {
             throw MQTTError.protocolViolation(
@@ -210,30 +210,34 @@ public struct Disconnect: MQTTControlPacket {
         // varheader
         let remaining = Bytes(bytes[msglen.length + 1..<bytes.count])
 
-        // v5
-        if remaining.count > 0 {
-            guard let reasonCode = DisconnectReasonCode(rawValue: remaining[0]) else {
-                throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidReturnCode))
-            }
+        switch version {
+            case .v5:
+                guard let reasonCode = DisconnectReasonCode(rawValue: remaining[0]) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidReturnCode))
+                }
 
-            // Decode properties
-            var properties: [Property] = []
-            let propslen = try decodeRemainigLength(Bytes(remaining[0..<remaining.count]))
-            let props = Bytes(remaining[propslen.length + 1..<remaining.count])
-            var buf = ByteBuffer(bytes: props)
-            var bytesRead = 0
-            while bytesRead < propslen.value {
-                guard let idByte: Byte = buf.readInteger(as: Byte.self) else {
-                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read byte at index: \(buf.readerIndex), from buffer: \(buf.debugDescription)")))
+                // Decode properties
+                var properties: [Property] = []
+                let propslen = try decodeRemainigLength(Bytes(remaining[0..<remaining.count]))
+                let props = Bytes(remaining[propslen.length + 1..<remaining.count])
+                var buf = ByteBuffer(bytes: props)
+                var bytesRead = 0
+                while bytesRead < propslen.value {
+                    guard let idByte: Byte = buf.readInteger(as: Byte.self) else {
+                        throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read byte at index: \(buf.readerIndex), from buffer: \(buf.debugDescription)")))
+                    }
+                    bytesRead += 1
+                    guard let id = PropertyIdentifier(rawValue: idByte) else {
+                        throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidPropertyIdentifier))
+                    }
+                    let property = try Property.decode(id: id, from: &buf, bytesRead: &bytesRead)
+                    properties.append(property)
                 }
-                bytesRead += 1
-                guard let id = PropertyIdentifier(rawValue: idByte) else {
-                    throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidPropertyIdentifier))
+                self.variableHeader = try .init(disconnectReasonCode: reasonCode, properties: .init(from: properties))
+            case .v3:
+                if remaining.count > 0 {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidRemainingLenght))
                 }
-                let property = try Property.decode(id: id, from: &buf, bytesRead: &bytesRead)
-                properties.append(property)
-            }
-            self.variableHeader = try .init(disconnectReasonCode: reasonCode, properties: .init(from: properties))
         }
     }
 

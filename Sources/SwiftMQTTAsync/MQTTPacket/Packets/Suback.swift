@@ -75,7 +75,7 @@ public struct Suback: MQTTControlPacket {
 }
 
 extension Suback {
-    public init(bytes: Bytes) throws {
+    public init(bytes: Bytes, version: Version) throws {
         let typeBytes = bytes[0] >> 4
         guard let type = MQTTControlPacketType(rawValue: typeBytes) else {
             throw MQTTError.protocolViolation(

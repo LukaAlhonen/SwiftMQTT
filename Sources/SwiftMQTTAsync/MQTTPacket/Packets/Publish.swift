@@ -1,3 +1,5 @@
+import NIOCore
+
 public struct PublishProperties: Properties {
     public var payloadFormatIndicator: Property?
     public var messageExpiryInterval: Property?
@@ -26,14 +28,14 @@ public struct PublishProperties: Properties {
 
 public extension PublishProperties {
     init(
-        payloadFormatIndicator: Byte?,
-        messageExpiryInterval: UInt32?,
-        topicAlias: UInt16?,
-        responseTopic: String?,
-        correlationData: Bytes?,
-        userProperties: [(String, String)]?,
-        subscriptionIdentifier: UInt?,
-        contentType: String?,
+        payloadFormatIndicator: Byte? = nil,
+        messageExpiryInterval: UInt32? = nil,
+        topicAlias: UInt16? = nil,
+        responseTopic: String? = nil,
+        correlationData: Bytes? = nil,
+        userProperties: [(String, String)]? = nil,
+        subscriptionIdentifier: UInt? = nil,
+        contentType: String? = nil,
     ) {
         if let payloadFormatIndicator { self.payloadFormatIndicator = Property.payloadFormatIndicator(payloadFormatIndicator)}
         if let messageExpiryInterval { self.messageExpiryInterval = Property.messageExpiryInterval(messageExpiryInterval)}
@@ -67,7 +69,7 @@ public extension PublishProperties {
                 case .contentType:
                     try self.setProperty(&self.contentType, property)
                 default:
-                    throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectdProperty(inPacket: .DISCONNECT)))
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectdProperty(inPacket: .PUBLISH)))
             }
         }
     }
@@ -78,7 +80,7 @@ public struct PublishVarHeader: Equatable, Sendable {
     public let packetId: UInt16?
     public let properties: PublishProperties?
 
-    public init(topicName: Bytes, packetId: UInt16?, properties: PublishProperties? = nil) throws {
+    public init(topicName: Bytes, packetId: UInt16? = nil, properties: PublishProperties? = nil) throws {
         guard let t = String(bytes: topicName, encoding: .utf8) else {
             throw MQTTError.unexpectedError("Unable to decode topic name")
         }
@@ -87,7 +89,7 @@ public struct PublishVarHeader: Equatable, Sendable {
         self.properties = properties
     }
 
-    public init(topicName: String, packetId: UInt16?, properties: PublishProperties? = nil) {
+    public init(topicName: String, packetId: UInt16? = nil, properties: PublishProperties? = nil) {
         self.topicName = topicName
         self.packetId = packetId
         self.properties = properties
@@ -99,9 +101,8 @@ public struct PublishVarHeader: Equatable, Sendable {
         let topicNameBytes: Bytes = Bytes(self.topicName.utf8)
         bytes.append(contentsOf: encodeUInt16(UInt16(topicNameBytes.count)))
         bytes.append(contentsOf: topicNameBytes)
-        if let packetId = self.packetId {
-            bytes.append(contentsOf: encodeUInt16(packetId))
-        }
+        if let packetId {bytes.append(contentsOf: encodeUInt16(packetId))}
+        bytes.append(contentsOf: properties?.encode() ?? [])
 
         return bytes
     }
@@ -111,6 +112,7 @@ public struct PublishVarHeader: Equatable, Sendable {
         if let packetId = self.packetId {
             str.append(contentsOf: ", Packet ID: \(packetId)")
         }
+        if let properties { str.append(", Properties: \(properties.toString())")}
 
         return str
     }
@@ -139,7 +141,7 @@ public struct PublishPayload: Equatable, Sendable {
 
 public struct Publish: MQTTControlPacket, Equatable {
     public var fixedHeader: FixedHeader
-    public var varHeader: PublishVarHeader
+    public var variableHeader: PublishVarHeader
     public var payload: PublishPayload
 
     public let dup: Bool
@@ -149,7 +151,7 @@ public struct Publish: MQTTControlPacket, Equatable {
 }
 
 extension Publish {
-    public init(bytes: Bytes) throws {
+    public init(bytes: Bytes, version: Version) throws {
         let typeBytes = bytes[0] >> 4
         guard let type = MQTTControlPacketType(rawValue: typeBytes) else {
             throw MQTTError.protocolViolation(
@@ -177,24 +179,55 @@ extension Publish {
         let topicLenLSB = remaining[1]
         let topicLen = (UInt16(topicLenMSB) << 8) | UInt16(topicLenLSB)
         let topicBytes = Bytes(remaining[2..<2 + Int(topicLen)])
-        // PacketId only included if QoS > 0
         var packetId: UInt16? = nil
+        var propertiesBytes: Bytes = []
+        var publishProperties: PublishProperties? = nil
+
+        // PacketId only included if QoS > 0
         if qos.rawValue > 0 {
             let packetIdMSB = remaining[2 + Int(topicLen)]
             let packetIdLSB = remaining[3 + Int(topicLen)]
             packetId = (UInt16(packetIdMSB) << 8) | UInt16(packetIdLSB)
+            propertiesBytes = Bytes(remaining[3+Int(topicLen)..<remaining.count])
+        } else {
+            propertiesBytes = Bytes(remaining[1+Int(topicLen)..<remaining.count])
         }
-
-        self.varHeader = try PublishVarHeader(topicName: topicBytes, packetId: packetId)
-        // Payload
-        self.payload = PublishPayload(
-            content: Bytes(remaining[self.varHeader.encode().count..<remaining.count]))
+        switch version {
+            case .v3:
+                self.variableHeader = try PublishVarHeader(topicName: topicBytes, packetId: packetId)
+                self.payload = PublishPayload(
+                    content: Bytes(remaining[self.variableHeader.encode().count..<remaining.count]))
+            case .v5:
+                // Decode properties
+                var properties: [Property] = []
+                let propslen = try decodeRemainigLength(Bytes(propertiesBytes[0..<propertiesBytes.count]))
+                let props = Bytes(propertiesBytes[propslen.length + 1..<2+Int(propslen.value)])
+                var buf = ByteBuffer(bytes: props)
+                var bytesRead = 0
+                while bytesRead < propslen.value {
+                    guard let idByte: Byte = buf.readInteger(as: Byte.self) else {
+                        throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read byte at index: \(buf.readerIndex), from buffer: \(buf.debugDescription)")))
+                    }
+                    bytesRead += 1
+                    guard let id = PropertyIdentifier(rawValue: idByte) else {
+                        throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidPropertyIdentifier))
+                    }
+                    let property = try Property.decode(id: id, from: &buf, bytesRead: &bytesRead)
+                    properties.append(property)
+                }
+                publishProperties = try .init(from: properties)
+        }
+        self.variableHeader = try .init(topicName: topicBytes, packetId: packetId, properties: publishProperties)
+        self.payload = .init(content: Bytes(remaining[self.variableHeader.encode().count..<remaining.count]))
     }
 
     public init(
         topicName: String, message: String, packetId: UInt16? = nil, duplicate: Bool = false,
-        qos: QoS, retain: Bool = false
-    ) {
+        qos: QoS, retain: Bool = false, properties: PublishProperties? = nil
+    ) throws {
+        if qos.rawValue > 0 && packetId == nil {
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))
+        }
         self.dup = duplicate
         self.qos = qos
         self.retain = retain
@@ -209,17 +242,20 @@ extension Publish {
         flags |= qosFlag
         flags |= retainFlag
 
-        self.varHeader = .init(topicName: topicName, packetId: packetId)
+        self.variableHeader = .init(topicName: topicName, packetId: packetId, properties: properties)
         self.payload = .init(content: Bytes(message.utf8))
         self.fixedHeader = .init(
             type: .PUBLISH, flags: flags,
-            remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
+            remainingLength: UInt(self.variableHeader.encode().count + self.payload.encode().count))
     }
 
     public init(
         topicName: String, message: Bytes, packetId: UInt16? = nil, duplicate: Bool = false,
-        qos: QoS, retain: Bool = false
-    ) {
+        qos: QoS, retain: Bool = false, properties: PublishProperties? = nil
+    ) throws {
+        if qos.rawValue > 0 && packetId == nil {
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))
+        }
         self.dup = duplicate
         self.qos = qos
         self.retain = retain
@@ -234,11 +270,11 @@ extension Publish {
         flags |= qosFlag
         flags |= retainFlag
 
-        self.varHeader = .init(topicName: topicName, packetId: packetId)
+        self.variableHeader = .init(topicName: topicName, packetId: packetId, properties: properties)
         self.payload = .init(content: message)
         self.fixedHeader = .init(
             type: .PUBLISH, flags: flags,
-            remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
+            remainingLength: UInt(self.variableHeader.encode().count + self.payload.encode().count))
     }
 }
 
@@ -246,7 +282,7 @@ extension Publish {
     public func encode() -> Bytes {
         var bytes: Bytes = []
         bytes.append(contentsOf: self.fixedHeader.encode())
-        bytes.append(contentsOf: self.varHeader.encode())
+        bytes.append(contentsOf: self.variableHeader.encode())
         bytes.append(contentsOf: self.payload.encode())
 
         return bytes
@@ -254,6 +290,6 @@ extension Publish {
 
     public func toString() -> String {
         return
-            "\(self.fixedHeader.toString()): dup: \(self.dup), qos: \(self.qos), retain: \(self.retain), \(self.varHeader.toString()), \(self.payload.toString())"
+            "\(self.fixedHeader.toString()): dup: \(self.dup), qos: \(self.qos), retain: \(self.retain), \(self.variableHeader.toString()), \(self.payload.toString())"
     }
 }

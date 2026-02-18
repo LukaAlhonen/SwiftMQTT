@@ -182,7 +182,7 @@ enum TestEnv {
         throw TestError.emptyPacketStream
     }
 
-    let pubPacket = Publish(topicName: "test/topic", message: "hello", qos: .AtMostOnce)
+    let pubPacket = try! Publish(topicName: "test/topic", message: "hello", qos: .AtMostOnce)
 
     try! await publisher.publish(message: "hello", qos: .AtMostOnce, topic: "test/topic")
 
@@ -241,7 +241,7 @@ enum TestEnv {
 
     let publish = try! await publisher.publish(
         message: "hello", qos: .AtLeastOnce, topic: "test/topic1")
-    guard let packetId = publish.varHeader.packetId else {
+    guard let packetId = publish.variableHeader.packetId else {
         throw MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))
     }
 
@@ -252,10 +252,8 @@ enum TestEnv {
     await publisher.stop()
     await subscriber.stop()
 
-    #expect(
-        packets[0] as? Publish
-            == Publish(
-                topicName: "test/topic1", message: "hello", packetId: packetId, qos: .AtLeastOnce))
+    let testPublish = try! Publish(topicName: "test/topic1", message: "hello", packetId: packetId, qos: .AtLeastOnce)
+    #expect(packets[0] as? Publish == testPublish)
     #expect(packets[1] as? Puback == Puback(packetId: packetId))
 }
 
@@ -311,7 +309,7 @@ enum TestEnv {
 
     let publish = try! await publisher.publish(
         message: "hello", qos: .ExactlyOnce, topic: "test/topic2")
-    guard let packetId = publish.varHeader.packetId else {
+    guard let packetId = publish.variableHeader.packetId else {
         throw MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))
     }
 
@@ -322,11 +320,9 @@ enum TestEnv {
     await publisher.stop()
     await subscriber.stop()
 
+    let testPublish = try! Publish(topicName: "test/topic2", message: "hello", packetId: packetId, qos: .ExactlyOnce)
     // Cast and compare each packet in order
-    #expect(
-        packets[0] as? Publish
-            == Publish(
-                topicName: "test/topic2", message: "hello", packetId: packetId, qos: .ExactlyOnce))
+    #expect(packets[0] as? Publish == testPublish)
     #expect(packets[1] as? Pubrec == Pubrec(packetId: packetId))
     #expect(packets[2] as? Pubrel == Pubrel(packetId: packetId))
     #expect(packets[3] as? Pubcomp == Pubcomp(packetId: packetId))

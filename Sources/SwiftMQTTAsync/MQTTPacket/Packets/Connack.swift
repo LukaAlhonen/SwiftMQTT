@@ -239,7 +239,7 @@ public struct Connack: MQTTControlPacket {
 
 // MARK: Init
 extension Connack {
-    public init(bytes: Bytes) throws {
+    public init(bytes: Bytes, version: Version) throws {
         let typeBits: Byte = bytes[0] >> 4
         guard let type = MQTTControlPacketType(rawValue: typeBits) else {
             throw MQTTError.protocolViolation(
@@ -268,42 +268,42 @@ extension Connack {
             throw MQTTError.protocolViolation(.malformedPacket(reason: .reservedBitModified))
         }
 
-        // v3
-        if remaining.count == 2 {
-            guard let connectionReturnCode = ConnectReturnCode(rawValue: remaining[1]) else {
-                throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidReturnCode))
-            }
-            self.varHeader = ConnackVariableHeader(
-                sessionPresent: remaining[0], connectReturnCode: connectionReturnCode)
-        // v5
-        } else {
-            guard let connectReasonCode = ConnectReasonCode(rawValue: remaining[1]) else {
-                throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidReturnCode))
-            }
-
-            // Decode properties
-            var properties: [Property] = []
-            let propslen = try decodeRemainigLength(Bytes(remaining[1..<remaining.count]))
-            let props = Bytes(remaining[propslen.length + 2..<remaining.count])
-            var buf = ByteBuffer(bytes: props)
-            var bytesRead = 0
-            while bytesRead < propslen.value {
-                guard let idByte: Byte = buf.readInteger(as: Byte.self) else {
-                    throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read byte at index: \(buf.readerIndex), from buffer: \(buf.debugDescription)")))
+        switch version {
+            case .v3:
+                if remaining.count != 2 { throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("malformed variable header")))}
+                guard let connectionReturnCode = ConnectReturnCode(rawValue: remaining[1]) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidReturnCode))
                 }
-                bytesRead += 1
-                guard let id = PropertyIdentifier(rawValue: idByte) else {
-                    throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidPropertyIdentifier))
+                self.varHeader = ConnackVariableHeader(
+                    sessionPresent: remaining[0], connectReturnCode: connectionReturnCode)
+            case .v5:
+                guard let connectReasonCode = ConnectReasonCode(rawValue: remaining[1]) else {
+                    throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidReturnCode))
                 }
-                let property = try Property.decode(id: id, from: &buf, bytesRead: &bytesRead)
-                properties.append(property)
-            }
 
-            self.varHeader = try ConnackVariableHeader(
-                sessionPresent: remaining[0],
-                connectReasonCode: connectReasonCode,
-                connackProperties: ConnackProperties.init(from: properties)
-            )
+                // Decode properties
+                var properties: [Property] = []
+                let propslen = try decodeRemainigLength(Bytes(remaining[1..<remaining.count]))
+                let props = Bytes(remaining[propslen.length + 2..<remaining.count])
+                var buf = ByteBuffer(bytes: props)
+                var bytesRead = 0
+                while bytesRead < propslen.value {
+                    guard let idByte: Byte = buf.readInteger(as: Byte.self) else {
+                        throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read byte at index: \(buf.readerIndex), from buffer: \(buf.debugDescription)")))
+                    }
+                    bytesRead += 1
+                    guard let id = PropertyIdentifier(rawValue: idByte) else {
+                        throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidPropertyIdentifier))
+                    }
+                    let property = try Property.decode(id: id, from: &buf, bytesRead: &bytesRead)
+                    properties.append(property)
+                }
+
+                self.varHeader = try ConnackVariableHeader(
+                    sessionPresent: remaining[0],
+                    connectReasonCode: connectReasonCode,
+                    connackProperties: ConnackProperties.init(from: properties)
+                )
         }
     }
 
