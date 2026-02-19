@@ -164,8 +164,8 @@ extension Puback {
 
                 // Decode properties
                 var properties: [Property] = []
-                let propslen = try decodeRemainigLength(Bytes(remaining[1..<remaining.count]))
-                let props = Bytes(remaining[propslen.length + 2..<2 + Int(propslen.value)])
+                let propslen = try decodeRemainigLength(Bytes(remaining[0..<remaining.count]))
+                let props = Bytes(remaining[propslen.length + 1..<2 + Int(propslen.value)])
                 var buf = ByteBuffer(bytes: props)
                 var bytesRead = 0
                 while bytesRead < propslen.value {
