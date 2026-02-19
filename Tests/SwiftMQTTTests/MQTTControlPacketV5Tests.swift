@@ -364,6 +364,42 @@ import Testing
 }
 
 // MARK: Pubrec
+@Test("Create v5 pubrec packet") func createV5Pubrec() {
+    let props = PubrecProperties(reasonString: "hello", userProperties: [("key", "value")])
+    let pubrec = Pubrec(packetId: 1, reasonCode: .success, properties: props)
+
+    #expect(pubrec.fixedHeader == FixedHeader(type: .PUBREC, flags: 0, remainingLength: 25))
+    #expect(
+        pubrec.varHeader
+            == PubrecVariableHeader(packetId: 1, reasonCode: .success, properties: props))
+}
+
+@Test("Decode v5 pubrec packet") func decodeV5Pubrec() {
+    let bytes: Bytes = [
+        0x50, 0x19, 0x00, 0x01, 0x00, 0x15, 0x1f, 0x00, 0x05, 0x68, 0x65, 0x6C, 0x6C, 0x6F, 0x26,
+        0x00, 0x03, 0x6B, 0x65, 0x79, 0x00, 0x05, 0x76, 0x61, 0x6C, 0x75, 0x65,
+    ]
+
+    let props = PubrecProperties(reasonString: "hello", userProperties: [("key", "value")])
+    let pubrec = try! Pubrec(bytes: bytes, version: .v5)
+
+    #expect(pubrec.fixedHeader == FixedHeader(type: .PUBREC, flags: 0, remainingLength: 25))
+    #expect(
+        pubrec.varHeader
+            == PubrecVariableHeader(packetId: 1, reasonCode: .success, properties: props))
+}
+
+@Test("Encode v5 pubrec packet") func encodeV5Pubrec() {
+    let bytes: Bytes = [
+        0x50, 0x19, 0x00, 0x01, 0x00, 0x15, 0x1f, 0x00, 0x05, 0x68, 0x65, 0x6C, 0x6C, 0x6F, 0x26,
+        0x00, 0x03, 0x6B, 0x65, 0x79, 0x00, 0x05, 0x76, 0x61, 0x6C, 0x75, 0x65,
+    ]
+
+    let props = PubrecProperties(reasonString: "hello", userProperties: [("key", "value")])
+    let pubrec = Pubrec(packetId: 1, reasonCode: .success, properties: props)
+
+    #expect(pubrec.encode() == bytes) 
+}
 
 // MARK: Pubrel
 
