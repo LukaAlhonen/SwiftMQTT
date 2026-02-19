@@ -505,8 +505,28 @@ import Testing
 
     #expect(subscribe.encode() == bytes)
 }
-// 130, 25, 0, 1, 15, 38, 0, 3, 107, 101, 121, 0, 5, 118, 97, 108, 117, 101, 11, 1, 0, 4, 116, 101, 115, 116, 30
-// 130, 25, 0, 1, 15, 11, 1, 38, 0, 3, 107, 101, 121, 0, 5, 118, 97, 108, 117, 101, 0, 4, 116, 101, 115, 116, 30
 // MARK: Unsuback
 
 // MARK: Unsubscribe
+@Test("Create v5 unsubscribe packet") func createV5Unsubscribe() {
+    let props = UnsubscribeProperties(userProperties: [("key", "value")])
+    let unsubscribe = Unsubscribe(packetId: 1, properties: props, topics: ["test"])
+
+    #expect(
+        unsubscribe.fixedHeader == FixedHeader(type: .UNSUBSCRIBE, flags: 2, remainingLength: 22))
+    #expect(unsubscribe.varHeader == UnsubscribeVariableHeader(packetId: 1, properties: props))
+    #expect(unsubscribe.payload == UnsubscribePayload(topics: ["test"]))
+}
+
+@Test("Encode v5 unsubscribe packet") func encodeV5Unsubscribe() {
+    let props = UnsubscribeProperties(userProperties: [("key", "value")])
+    let unsubscribe = Unsubscribe(packetId: 1, properties: props, topics: ["test"])
+
+    let bytes: Bytes = [
+        0xa2, 0x16, 0x00, 0x01, 0x0d, 0x26, 0x00, 0x03,
+        0x6B, 0x65, 0x79, 0x00, 0x05, 0x76, 0x61, 0x6C,
+        0x75, 0x65, 0x00, 0x04, 0x74, 0x65, 0x73, 0x74,
+    ]
+
+    #expect(unsubscribe.encode() == bytes)
+}

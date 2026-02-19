@@ -1,3 +1,34 @@
+public struct UnsubscribeProperties: Properties {
+    public var userProperties: [Property] = []
+
+    internal var properties: [Property?] {
+        var p: [Property] = []
+        for property in self.userProperties { p.append(property) }
+        return p
+    }
+}
+
+extension UnsubscribeProperties {
+    public init(userProperties: [(String, String)]? = nil) {
+        if let userProperties {
+            for (key, value) in userProperties {
+                self.userProperties.append(Property.userProperty(key, value))
+            }
+        }
+    }
+
+    public init(from properties: [Property]) throws {
+        for property in properties {
+            if case .userProperty = property.identifier {
+                self.userProperties.append(property)
+            } else {
+                throw MQTTError.protocolViolation(
+                    .malformedPacket(reason: .incorrectdProperty(inPacket: .UNSUBSCRIBE)))
+            }
+        }
+    }
+}
+
 public struct UnsubscribePayload: Equatable, Sendable {
     public let topics: [String]
 
@@ -27,17 +58,24 @@ public struct UnsubscribePayload: Equatable, Sendable {
 
 public struct UnsubscribeVariableHeader: Equatable, Sendable {
     public let packetId: UInt16
+    public var properties: UnsubscribeProperties?
 
-    public init(packetId: UInt16) {
+    public init(packetId: UInt16, properties: UnsubscribeProperties? = nil) {
         self.packetId = packetId
+        self.properties = properties
     }
 
     public func encode() -> Bytes {
-        return encodeUInt16(self.packetId)
+        var bytes: Bytes = []
+        bytes.append(contentsOf: encodeUInt16(self.packetId))
+        bytes.append(contentsOf: self.properties?.encode() ?? [])
+        return bytes
     }
 
     public func toString() -> String {
-        return "Packet ID: \(self.packetId)"
+        var s: String = "Packet ID: \(self.packetId)"
+        if let properties { s.append(properties.toString()) }
+        return s
     }
 }
 
@@ -46,8 +84,8 @@ public struct Unsubscribe: MQTTControlPacket {
     public var varHeader: UnsubscribeVariableHeader
     public var payload: UnsubscribePayload
 
-    public init(packetId: UInt16, topics: [String]) {
-        self.varHeader = .init(packetId: packetId)
+    public init(packetId: UInt16, properties: UnsubscribeProperties? = nil, topics: [String]) {
+        self.varHeader = .init(packetId: packetId, properties: properties)
         self.payload = .init(topics: topics)
         self.fixedHeader = .init(
             type: .UNSUBSCRIBE, flags: 2,
