@@ -1,3 +1,45 @@
+import NIOCore
+
+public struct SubackProperties: Properties {
+    public var reasonString: Property?
+    public var userProperties: [Property] = []
+
+    internal var properties: [Property?] {
+        var p: [Property?] = []
+        p.append(self.reasonString)
+        for property in self.userProperties {
+            p.append(property)
+        }
+
+        return p
+    }
+}
+
+extension SubackProperties {
+    public init(reasonString: String? = nil, userProperties: [(String, String)]? = nil) {
+        if let reasonString { self.reasonString = Property.reasonString(reasonString) }
+        if let userProperties {
+            for (key, value) in userProperties {
+                self.userProperties.append(Property.userProperty(key, value))
+            }
+        }
+    }
+
+    public init(from properties: [Property]) throws {
+        for property in properties {
+            switch property.identifier {
+            case .reasonString:
+                try self.setProperty(&self.reasonString, property)
+            case .userProperty:
+                self.userProperties.append(property)
+            default:
+                throw MQTTError.protocolViolation(
+                    .malformedPacket(reason: .incorrectdProperty(inPacket: .PUBREL)))
+            }
+        }
+    }
+}
+
 public enum SubackReturnCode: UInt8, Sendable {
     case QoS0 = 0x00
     case QoS1 = 0x01
@@ -54,17 +96,26 @@ public struct SubackPayload: Equatable, Sendable {
 
 public struct SubackVariableHeader: Equatable, Sendable {
     public let packetId: UInt16
+    public var properties: SubackProperties?
 
-    public init(packetId: UInt16) {
+    public init(packetId: UInt16, properties: SubackProperties? = nil) {
         self.packetId = packetId
+        self.properties = properties
     }
 
     public func encode() -> Bytes {
-        return encodeUInt16(self.packetId)
+        var bytes: Bytes = []
+        bytes.append(contentsOf: encodeUInt16(self.packetId))
+        bytes.append(contentsOf: self.properties?.encode() ?? [])
+        return bytes
     }
 
     public func toString() -> String {
-        return "Packet ID: \(self.packetId)"
+        var s: String = "Packet ID: \(self.packetId)"
+
+        if let properties { s.append("Properties: \(properties.toString())") }
+
+        return s
     }
 }
 
@@ -93,16 +144,34 @@ extension Suback {
                 .malformedPacket(reason: .invalidFlags(expected: 0, actual: flags)))
         }
 
+        let msgLen = try decodeRemainigLength(bytes)
+
+        let remaining = Bytes(bytes[msgLen.length + 1..<bytes.count])
+        // let varHeaderBytes: Bytes = Bytes(bytes[2..<bytes.count])
         let packetId = (UInt16(bytes[2]) << 8) | UInt16(bytes[3])
-        self.varHeader = SubackVariableHeader(packetId: packetId)
-        self.payload = try SubackPayload(bytes: Bytes(bytes[4..<bytes.count]))
+        var subackProperties: SubackProperties? = nil
+
+        if case .v5 = version {
+            let varHeaderBytes: Bytes = Bytes(bytes[3..<bytes.count])
+            // Decode properties
+            let propslen = try decodeRemainigLength(varHeaderBytes)
+            let props = Bytes(varHeaderBytes[propslen.length + 1..<2 + Int(propslen.value)])
+            let properties = try decodeProperties(from: props, length: propslen.value)
+            subackProperties = try .init(from: properties)
+        }
+
         self.fixedHeader = FixedHeader(
             type: type, flags: flags,
-            remainingLength: UInt(self.varHeader.encode().count + self.payload.encode().count))
+            remainingLength: msgLen.value)
+        self.varHeader = SubackVariableHeader(packetId: packetId, properties: subackProperties)
+        self.payload = try SubackPayload(
+            bytes: Bytes(remaining[self.varHeader.encode().count..<remaining.count]))
     }
 
-    public init(packetId: UInt16, returnCodes: [SubackReturnCode]) {
-        self.varHeader = SubackVariableHeader(packetId: packetId)
+    public init(
+        packetId: UInt16, properties: SubackProperties? = nil, returnCodes: [SubackReturnCode]
+    ) {
+        self.varHeader = SubackVariableHeader(packetId: packetId, properties: properties)
         self.payload = SubackPayload(returnCodes: returnCodes)
         self.fixedHeader = FixedHeader(
             type: .SUBACK, flags: 0,

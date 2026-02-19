@@ -1,5 +1,5 @@
-import Testing
 import Foundation
+import Testing
 
 @testable import SwiftMQTTAsync
 
@@ -9,7 +9,8 @@ enum TestEnv {
     }
 }
 
-@Test("Connect to broker and check that keepalive works", .enabled(if: TestEnv.host != nil)) func connectClient() async {
+@Test("Connect to broker and check that keepalive works", .enabled(if: TestEnv.host != nil))
+func connectClient() async {
     let host = TestEnv.host!
     let config = Config(keepAlive: 2)
     let client = MQTTClientV3(clientId: "test-client", host: host, port: 1883, config: config)
@@ -39,7 +40,9 @@ enum TestEnv {
         try await task.value
     }
 
-    #expect(packets[0] as? Connect == Connect(version: .v3, clientId: "test-client", keepAlive: config.keepAlive))
+    #expect(
+        packets[0] as? Connect
+            == Connect(version: .v3, clientId: "test-client", keepAlive: config.keepAlive))
     #expect(
         packets[1] as? Connack == Connack(returnCode: .ConnectionAccepted, sessionPresent: false))
     #expect(packets[2] as? Pingreq == Pingreq())
@@ -196,7 +199,9 @@ enum TestEnv {
     #expect(packet == pubPacket)
 }
 
-@Test("QoS 1 publish and subscribe", .enabled(if: TestEnv.host != nil)) func qos1PubSub() async throws {
+@Test("QoS 1 publish and subscribe", .enabled(if: TestEnv.host != nil)) func qos1PubSub()
+    async throws
+{
     let host = TestEnv.host!
     let subscriber: MQTTClientV3 = .init(
         clientId: "test-sub1", host: host, port: 1883, config: .init())
@@ -252,12 +257,15 @@ enum TestEnv {
     await publisher.stop()
     await subscriber.stop()
 
-    let testPublish = try! Publish(topicName: "test/topic1", message: "hello", packetId: packetId, qos: .AtLeastOnce)
+    let testPublish = try! Publish(
+        topicName: "test/topic1", message: "hello", packetId: packetId, qos: .AtLeastOnce)
     #expect(packets[0] as? Publish == testPublish)
     #expect(packets[1] as? Puback == Puback(packetId: packetId))
 }
 
-@Test("QoS 2 publish and subscribe", .enabled(if: TestEnv.host != nil)) func qos2PubSub() async throws {
+@Test("QoS 2 publish and subscribe", .enabled(if: TestEnv.host != nil)) func qos2PubSub()
+    async throws
+{
     let host = TestEnv.host!
     let subscriber: MQTTClientV3 = .init(
         clientId: "test-sub2", host: host, port: 1883, config: .init())
@@ -320,7 +328,8 @@ enum TestEnv {
     await publisher.stop()
     await subscriber.stop()
 
-    let testPublish = try! Publish(topicName: "test/topic2", message: "hello", packetId: packetId, qos: .ExactlyOnce)
+    let testPublish = try! Publish(
+        topicName: "test/topic2", message: "hello", packetId: packetId, qos: .ExactlyOnce)
     // Cast and compare each packet in order
     #expect(packets[0] as? Publish == testPublish)
     #expect(packets[1] as? Pubrec == Pubrec(packetId: packetId))

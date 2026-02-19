@@ -138,12 +138,12 @@ extension Puback {
                 .malformedPacket(reason: .invalidFlags(expected: 0, actual: flags)))
         }
 
-        let msgLen = bytes[1]
-        let packetIdMSB = bytes[2]
-        let packetIdLSB = bytes[3]
+        let msgLen = try decodeRemainigLength(bytes)
+        let varHeaderBytes = Bytes(bytes[msgLen.length + 1..<bytes.count])
+        let packetIdMSB = varHeaderBytes[0]
+        let packetIdLSB = varHeaderBytes[1]
         let packetId = (UInt16(packetIdMSB) << 8) | UInt16(packetIdLSB)
-
-        let remaining: Bytes = Bytes(bytes[4..<bytes.count])
+        let remaining: Bytes = Bytes(varHeaderBytes[2..<varHeaderBytes.count])
 
         var pubackReasonCode: PubackReasonCode? = nil
         var pubackProperties: PubackProperties? = nil
@@ -154,7 +154,7 @@ extension Puback {
                 throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidRemainingLength))
             }
         case .v5:
-            if msgLen > 2 {
+            if msgLen.value > 2 {
                 // Decode reason code
                 guard let reasonCode: PubackReasonCode = PubackReasonCode(rawValue: remaining[0])
                 else {
@@ -163,34 +163,16 @@ extension Puback {
                 pubackReasonCode = reasonCode
 
                 // Decode properties
-                var properties: [Property] = []
                 let propslen = try decodeRemainigLength(Bytes(remaining[0..<remaining.count]))
                 let props = Bytes(remaining[propslen.length + 1..<2 + Int(propslen.value)])
-                var buf = ByteBuffer(bytes: props)
-                var bytesRead = 0
-                while bytesRead < propslen.value {
-                    guard let idByte: Byte = buf.readInteger(as: Byte.self) else {
-                        throw MQTTError.protocolViolation(
-                            .malformedPacket(
-                                reason: .decodeError(
-                                    "Unable to read byte at index: \(buf.readerIndex), from buffer: \(buf.debugDescription)"
-                                )))
-                    }
-                    bytesRead += 1
-                    guard let id = PropertyIdentifier(rawValue: idByte) else {
-                        throw MQTTError.protocolViolation(
-                            .malformedPacket(reason: .invalidPropertyIdentifier))
-                    }
-                    let property = try Property.decode(id: id, from: &buf, bytesRead: &bytesRead)
-                    properties.append(property)
-                }
+                let properties = try decodeProperties(from: props, length: propslen.value)
                 pubackProperties = try .init(from: properties)
             } else {
                 pubackReasonCode = .success
             }
         }
 
-        self.fixedHeader = .init(type: type, flags: flags, remainingLength: UInt(msgLen))
+        self.fixedHeader = .init(type: type, flags: flags, remainingLength: msgLen.value)
         self.varHeader = .init(
             packetId: packetId, reasonCode: pubackReasonCode, properties: pubackProperties)
     }

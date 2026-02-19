@@ -18,7 +18,7 @@ public struct PublishProperties: Properties {
         p.append(topicAlias)
         p.append(responseTopic)
         p.append(correlationData)
-        for property in userProperties { p.append(property)}
+        for property in userProperties { p.append(property) }
         p.append(subscriptionIdentifier)
         p.append(contentType)
 
@@ -26,8 +26,8 @@ public struct PublishProperties: Properties {
     }
 }
 
-public extension PublishProperties {
-    init(
+extension PublishProperties {
+    public init(
         payloadFormatIndicator: Byte? = nil,
         messageExpiryInterval: UInt32? = nil,
         topicAlias: UInt16? = nil,
@@ -37,39 +37,48 @@ public extension PublishProperties {
         subscriptionIdentifier: UInt? = nil,
         contentType: String? = nil,
     ) {
-        if let payloadFormatIndicator { self.payloadFormatIndicator = Property.payloadFormatIndicator(payloadFormatIndicator)}
-        if let messageExpiryInterval { self.messageExpiryInterval = Property.messageExpiryInterval(messageExpiryInterval)}
-        if let topicAlias {self.topicAlias = Property.topicAlias(topicAlias)}
-        if let responseTopic {self.responseTopic = Property.responseTopic(responseTopic)}
-        if let correlationData {self.correlationData = Property.correlationData(correlationData)}
-        if let userProperties {
-            for (key, value) in userProperties { self.userProperties.append(Property.userProperty(key, value))}
+        if let payloadFormatIndicator {
+            self.payloadFormatIndicator = Property.payloadFormatIndicator(payloadFormatIndicator)
         }
-        if let subscriptionIdentifier {self.subscriptionIdentifier = Property.subscriptionIdentifier(subscriptionIdentifier)}
-        if let contentType { self.contentType = Property.contentType(contentType)}
+        if let messageExpiryInterval {
+            self.messageExpiryInterval = Property.messageExpiryInterval(messageExpiryInterval)
+        }
+        if let topicAlias { self.topicAlias = Property.topicAlias(topicAlias) }
+        if let responseTopic { self.responseTopic = Property.responseTopic(responseTopic) }
+        if let correlationData { self.correlationData = Property.correlationData(correlationData) }
+        if let userProperties {
+            for (key, value) in userProperties {
+                self.userProperties.append(Property.userProperty(key, value))
+            }
+        }
+        if let subscriptionIdentifier {
+            self.subscriptionIdentifier = Property.subscriptionIdentifier(subscriptionIdentifier)
+        }
+        if let contentType { self.contentType = Property.contentType(contentType) }
     }
 
-    init(from properties: [Property]) throws {
+    public init(from properties: [Property]) throws {
         for property in properties {
             switch property.identifier {
-                case .payloadFormatIndicator:
-                    try self.setProperty(&self.payloadFormatIndicator, property)
-                case .messageExpiryInterval:
-                    try self.setProperty(&self.messageExpiryInterval, property)
-                case .topicAlias:
-                    try self.setProperty(&self.topicAlias, property)
-                case .responseTopic:
-                    try self.setProperty(&self.responseTopic, property)
-                case .correlationData:
-                    try self.setProperty(&self.correlationData, property)
-                case .userProperty:
-                    self.userProperties.append(property)
-                case .subscriptionIdentifier:
-                    try self.setProperty(&self.subscriptionIdentifier, property)
-                case .contentType:
-                    try self.setProperty(&self.contentType, property)
-                default:
-                    throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectdProperty(inPacket: .PUBLISH)))
+            case .payloadFormatIndicator:
+                try self.setProperty(&self.payloadFormatIndicator, property)
+            case .messageExpiryInterval:
+                try self.setProperty(&self.messageExpiryInterval, property)
+            case .topicAlias:
+                try self.setProperty(&self.topicAlias, property)
+            case .responseTopic:
+                try self.setProperty(&self.responseTopic, property)
+            case .correlationData:
+                try self.setProperty(&self.correlationData, property)
+            case .userProperty:
+                self.userProperties.append(property)
+            case .subscriptionIdentifier:
+                try self.setProperty(&self.subscriptionIdentifier, property)
+            case .contentType:
+                try self.setProperty(&self.contentType, property)
+            default:
+                throw MQTTError.protocolViolation(
+                    .malformedPacket(reason: .incorrectdProperty(inPacket: .PUBLISH)))
             }
         }
     }
@@ -80,7 +89,9 @@ public struct PublishVarHeader: Equatable, Sendable {
     public let packetId: UInt16?
     public let properties: PublishProperties?
 
-    public init(topicName: Bytes, packetId: UInt16? = nil, properties: PublishProperties? = nil) throws {
+    public init(topicName: Bytes, packetId: UInt16? = nil, properties: PublishProperties? = nil)
+        throws
+    {
         guard let t = String(bytes: topicName, encoding: .utf8) else {
             throw MQTTError.unexpectedError("Unable to decode topic name")
         }
@@ -101,7 +112,7 @@ public struct PublishVarHeader: Equatable, Sendable {
         let topicNameBytes: Bytes = Bytes(self.topicName.utf8)
         bytes.append(contentsOf: encodeUInt16(UInt16(topicNameBytes.count)))
         bytes.append(contentsOf: topicNameBytes)
-        if let packetId {bytes.append(contentsOf: encodeUInt16(packetId))}
+        if let packetId { bytes.append(contentsOf: encodeUInt16(packetId)) }
         bytes.append(contentsOf: properties?.encode() ?? [])
 
         return bytes
@@ -112,7 +123,7 @@ public struct PublishVarHeader: Equatable, Sendable {
         if let packetId = self.packetId {
             str.append(contentsOf: ", Packet ID: \(packetId)")
         }
-        if let properties { str.append(", Properties: \(properties.toString())")}
+        if let properties { str.append(", Properties: \(properties.toString())") }
 
         return str
     }
@@ -188,37 +199,27 @@ extension Publish {
             let packetIdMSB = remaining[2 + Int(topicLen)]
             let packetIdLSB = remaining[3 + Int(topicLen)]
             packetId = (UInt16(packetIdMSB) << 8) | UInt16(packetIdLSB)
-            propertiesBytes = Bytes(remaining[3+Int(topicLen)..<remaining.count])
+            propertiesBytes = Bytes(remaining[3 + Int(topicLen)..<remaining.count])
         } else {
-            propertiesBytes = Bytes(remaining[1+Int(topicLen)..<remaining.count])
+            propertiesBytes = Bytes(remaining[1 + Int(topicLen)..<remaining.count])
         }
         switch version {
-            case .v3:
-                self.variableHeader = try PublishVarHeader(topicName: topicBytes, packetId: packetId)
-                self.payload = PublishPayload(
-                    content: Bytes(remaining[self.variableHeader.encode().count..<remaining.count]))
-            case .v5:
-                // Decode properties
-                var properties: [Property] = []
-                let propslen = try decodeRemainigLength(Bytes(propertiesBytes[0..<propertiesBytes.count]))
-                let props = Bytes(propertiesBytes[propslen.length + 1..<2+Int(propslen.value)])
-                var buf = ByteBuffer(bytes: props)
-                var bytesRead = 0
-                while bytesRead < propslen.value {
-                    guard let idByte: Byte = buf.readInteger(as: Byte.self) else {
-                        throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read byte at index: \(buf.readerIndex), from buffer: \(buf.debugDescription)")))
-                    }
-                    bytesRead += 1
-                    guard let id = PropertyIdentifier(rawValue: idByte) else {
-                        throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidPropertyIdentifier))
-                    }
-                    let property = try Property.decode(id: id, from: &buf, bytesRead: &bytesRead)
-                    properties.append(property)
-                }
-                publishProperties = try .init(from: properties)
+        case .v3:
+            self.variableHeader = try PublishVarHeader(topicName: topicBytes, packetId: packetId)
+            self.payload = PublishPayload(
+                content: Bytes(remaining[self.variableHeader.encode().count..<remaining.count]))
+        case .v5:
+            // Decode properties
+            let propslen = try decodeRemainigLength(
+                Bytes(propertiesBytes[0..<propertiesBytes.count]))
+            let props = Bytes(propertiesBytes[propslen.length + 1..<2 + Int(propslen.value)])
+            let properties = try decodeProperties(from: props, length: propslen.value)
+            publishProperties = try .init(from: properties)
         }
-        self.variableHeader = try .init(topicName: topicBytes, packetId: packetId, properties: publishProperties)
-        self.payload = .init(content: Bytes(remaining[self.variableHeader.encode().count..<remaining.count]))
+        self.variableHeader = try .init(
+            topicName: topicBytes, packetId: packetId, properties: publishProperties)
+        self.payload = .init(
+            content: Bytes(remaining[self.variableHeader.encode().count..<remaining.count]))
     }
 
     public init(
@@ -242,7 +243,8 @@ extension Publish {
         flags |= qosFlag
         flags |= retainFlag
 
-        self.variableHeader = .init(topicName: topicName, packetId: packetId, properties: properties)
+        self.variableHeader = .init(
+            topicName: topicName, packetId: packetId, properties: properties)
         self.payload = .init(content: Bytes(message.utf8))
         self.fixedHeader = .init(
             type: .PUBLISH, flags: flags,
@@ -270,7 +272,8 @@ extension Publish {
         flags |= qosFlag
         flags |= retainFlag
 
-        self.variableHeader = .init(topicName: topicName, packetId: packetId, properties: properties)
+        self.variableHeader = .init(
+            topicName: topicName, packetId: packetId, properties: properties)
         self.payload = .init(content: message)
         self.fixedHeader = .init(
             type: .PUBLISH, flags: flags,

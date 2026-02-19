@@ -398,15 +398,115 @@ import Testing
     let props = PubrecProperties(reasonString: "hello", userProperties: [("key", "value")])
     let pubrec = Pubrec(packetId: 1, reasonCode: .success, properties: props)
 
-    #expect(pubrec.encode() == bytes) 
+    #expect(pubrec.encode() == bytes)
 }
 
 // MARK: Pubrel
+@Test("Create v5 pubrel packet") func createV5Pubrel() {
+    let props = PubrelProperties(reasonString: "hello", userProperties: [("key", "value")])
+    let pubrel = Pubrel(packetId: 1, reasonCode: .success, properties: props)
+
+    #expect(pubrel.fixedHeader == FixedHeader(type: .PUBREL, flags: 2, remainingLength: 25))
+    #expect(
+        pubrel.varHeader
+            == PubrelVariableHeader(packetId: 1, reasonCode: .success, properties: props))
+}
+
+@Test("Decode v5 pubrel packet") func decodeV5Pubrel() {
+    let props = PubrelProperties(reasonString: "hello", userProperties: [("key", "value")])
+
+    let bytes: Bytes = [
+        0x62, 0x19, 0x00, 0x01, 0x00, 0x15, 0x1f, 0x00, 0x05, 0x68, 0x65, 0x6C, 0x6C, 0x6F, 0x26,
+        0x00, 0x03, 0x6B, 0x65, 0x79, 0x00, 0x05, 0x76, 0x61, 0x6C, 0x75, 0x65,
+    ]
+
+    let pubrel = try! Pubrel(bytes: bytes, version: .v5)
+
+    #expect(pubrel.fixedHeader == FixedHeader(type: .PUBREL, flags: 2, remainingLength: 25))
+    #expect(
+        pubrel.varHeader
+            == PubrelVariableHeader(packetId: 1, reasonCode: .success, properties: props))
+}
+
+@Test("Encode v5 pubrel packet") func encodeV5Pubrel() {
+    let props = PubrelProperties(reasonString: "hello", userProperties: [("key", "value")])
+    let pubrel = Pubrel(packetId: 1, reasonCode: .success, properties: props)
+
+    let bytes: Bytes = [
+        0x62, 0x19, 0x00, 0x01, 0x00, 0x15, 0x1f, 0x00, 0x05, 0x68, 0x65, 0x6C, 0x6C, 0x6F, 0x26,
+        0x00, 0x03, 0x6B, 0x65, 0x79, 0x00, 0x05, 0x76, 0x61, 0x6C, 0x75, 0x65,
+    ]
+
+    #expect(pubrel.encode() == bytes)
+}
 
 // MARK: Suback
+@Test("Create v5 suback packet") func createV5Suback() {
+    let props = SubackProperties(reasonString: "hello", userProperties: [("key", "value")])
+    let suback = Suback(packetId: 1, properties: props, returnCodes: [.QoS0])
+
+    #expect(suback.fixedHeader == FixedHeader(type: .SUBACK, flags: 0, remainingLength: 25))
+    #expect(suback.varHeader == SubackVariableHeader(packetId: 1, properties: props))
+    #expect(suback.payload == SubackPayload(returnCodes: [.QoS0]))
+}
+
+@Test("Decode v5 suback packet") func decodeV5Suback() {
+    let bytes: Bytes = [
+        0x90, 0x19, 0x00, 0x01, 0x15, 0x1f, 0x00, 0x05, 0x68, 0x65, 0x6C, 0x6C, 0x6F, 0x26,
+        0x00, 0x03, 0x6B, 0x65, 0x79, 0x00, 0x05, 0x76, 0x61, 0x6C, 0x75, 0x65, 0x00,
+    ]
+
+    let suback = try! Suback(bytes: bytes, version: .v5)
+    let props = SubackProperties(reasonString: "hello", userProperties: [("key", "value")])
+
+    #expect(suback.fixedHeader == FixedHeader(type: .SUBACK, flags: 0, remainingLength: 25))
+    #expect(suback.varHeader == SubackVariableHeader(packetId: 1, properties: props))
+    #expect(suback.payload == SubackPayload(returnCodes: [.QoS0]))
+}
+
+@Test("Encode v5 suback packet") func encodeV5Suback() {
+    let props = SubackProperties(reasonString: "hello", userProperties: [("key", "value")])
+    let suback = Suback(packetId: 1, properties: props, returnCodes: [.QoS0])
+
+    let bytes: Bytes = [
+        0x90, 0x19, 0x00, 0x01, 0x15, 0x1f, 0x00, 0x05, 0x68, 0x65, 0x6C, 0x6C, 0x6F, 0x26,
+        0x00, 0x03, 0x6B, 0x65, 0x79, 0x00, 0x05, 0x76, 0x61, 0x6C, 0x75, 0x65, 0x00,
+    ]
+
+    #expect(suback.encode() == bytes)
+}
 
 // MARK: Subscribe
+@Test("Create v5 subscribe packet") func createV5Subscribe() {
+    let props = SubscribeProperties(subscriptionIdentifier: 1, userProperties: [("key", "value")])  // len 18
+    let subscribe = Subscribe(
+        packetId: 1, properties: props,
+        topics: [.init(topic: "test", retainHandling: 1, rap: true, nl: true, qos: .ExactlyOnce)])
 
+    #expect(subscribe.fixedHeader == FixedHeader(type: .SUBSCRIBE, flags: 2, remainingLength: 25))
+    #expect(subscribe.varHeader == SubscribeVariableHeader(packetId: 1, properties: props))
+    #expect(
+        subscribe.payload
+            == SubscribePayload(topics: [
+                .init(topic: "test", retainHandling: 1, rap: true, nl: true, qos: .ExactlyOnce)
+            ]))
+}
+
+@Test("Encode v5 subscribe packet") func encodeV5Subscribe() {
+    let bytes: Bytes = [
+        0x82, 0x19, 0x00, 0x01, 0x0f, 0x0b, 0x01, 0x26, 0x00, 0x03, 0x6b, 0x65, 0x79, 0x00, 0x05,
+        0x76, 0x61, 0x6c, 0x75, 0x65, 0x00, 0x04, 0x74, 0x65, 0x73, 0x74, 0x1e,
+    ]
+
+    let props = SubscribeProperties(subscriptionIdentifier: 1, userProperties: [("key", "value")])  // len 18
+    let subscribe = Subscribe(
+        packetId: 1, properties: props,
+        topics: [.init(topic: "test", retainHandling: 1, rap: true, nl: true, qos: .ExactlyOnce)])
+
+    #expect(subscribe.encode() == bytes)
+}
+// 130, 25, 0, 1, 15, 38, 0, 3, 107, 101, 121, 0, 5, 118, 97, 108, 117, 101, 11, 1, 0, 4, 116, 101, 115, 116, 30
+// 130, 25, 0, 1, 15, 11, 1, 38, 0, 3, 107, 101, 121, 0, 5, 118, 97, 108, 117, 101, 0, 4, 116, 101, 115, 116, 30
 // MARK: Unsuback
 
 // MARK: Unsubscribe

@@ -2,22 +2,22 @@ import NIOCore
 
 public enum DisconnectReasonCode: Byte, Sendable {
     case normalDisconnection = 0x00
-    case disconnectWithWillMessage  = 0x04
+    case disconnectWithWillMessage = 0x04
     case unspecifiedError = 0x80
-    case malformedPacket  = 0x81
-    case protocolError  = 0x82
+    case malformedPacket = 0x81
+    case protocolError = 0x82
     case implementationSpecificError = 0x83
-    case notAuthorized  = 0x87
-    case serverBusy  = 0x89
-    case serverShuttingDown  = 0x8B
-    case keepAliveTimeout  = 0x8D
-    case sessionTakenOver  = 0x8E
-    case topicFilterInvalid  = 0x8F
-    case topicNameInvalid  = 0x90
+    case notAuthorized = 0x87
+    case serverBusy = 0x89
+    case serverShuttingDown = 0x8B
+    case keepAliveTimeout = 0x8D
+    case sessionTakenOver = 0x8E
+    case topicFilterInvalid = 0x8F
+    case topicNameInvalid = 0x90
     case receiveMaximumExceeded = 0x93
-    case topicAliasInvalid  = 0x94
+    case topicAliasInvalid = 0x94
     case packetTooLarge = 0x95
-    case messageRateTooHigh  = 0x96
+    case messageRateTooHigh = 0x96
     case quotaExceeded = 0x97
     case administrativeAction = 0x98
     case payloadFormatInvalid = 0x99
@@ -26,73 +26,73 @@ public enum DisconnectReasonCode: Byte, Sendable {
     case useAnotherServer = 0x9C
     case serverMoved = 0x9D
     case sharedSubscriptionsNotSupported = 0x9E
-    case connectionRateExceeded  = 0x9F
+    case connectionRateExceeded = 0x9F
     case maximumConnectTime = 0xA0
     case subscriptionIdentifersNotSupported = 0xA1
     case wildcardSubscriptionsNotSupported = 0xA2
 }
 
-public extension DisconnectReasonCode {
-    func toString() -> String {
+extension DisconnectReasonCode {
+    public func toString() -> String {
         switch self {
-            case .normalDisconnection:
-                return "normal disconnection"
-            case .disconnectWithWillMessage :
-                return "disconnect with will message"
-            case .unspecifiedError:
-                return "unspecified error"
-            case .malformedPacket :
-                return "malformed packet"
-            case .protocolError :
-                return "protocol error"
-            case .implementationSpecificError:
-                return "implementation specific error"
-            case .notAuthorized :
-                return "not authorized"
-            case .serverBusy :
-                return "server busy"
-            case .serverShuttingDown :
-                return "server shutting down"
-            case .keepAliveTimeout :
-                return "keepalive timeout"
-            case .sessionTakenOver :
-                return "session taken over"
-            case .topicFilterInvalid :
-                return "topic filter invalid"
-            case .topicNameInvalid :
-                return "topic name invalid"
-            case .receiveMaximumExceeded:
-                return "receive maximum exceeded"
-            case .topicAliasInvalid :
-                return "topic alias invalid"
-            case .packetTooLarge:
-                return "packet too large"
-            case .messageRateTooHigh :
-                return "message rate too high"
-            case .quotaExceeded:
-                return "quota exceeded"
-            case .administrativeAction:
-                return "administrative action"
-            case .payloadFormatInvalid:
-                return "payload format invalid"
-            case .retainNotSupported:
-                return "retain not supported"
-            case .qosNotSupported:
-                return "QoS not supported"
-            case .useAnotherServer:
-                return "use another server"
-            case .serverMoved:
-                return "server moved"
-            case .sharedSubscriptionsNotSupported:
-                return "shared subscriptions not supported"
-            case .connectionRateExceeded :
-                return "connection rate exceeded"
-            case .maximumConnectTime:
-                return "maximum connect time"
-            case .subscriptionIdentifersNotSupported:
-                return "subscription"
-            case .wildcardSubscriptionsNotSupported:
-                return "wildcard subscriptions not supported"
+        case .normalDisconnection:
+            return "normal disconnection"
+        case .disconnectWithWillMessage:
+            return "disconnect with will message"
+        case .unspecifiedError:
+            return "unspecified error"
+        case .malformedPacket:
+            return "malformed packet"
+        case .protocolError:
+            return "protocol error"
+        case .implementationSpecificError:
+            return "implementation specific error"
+        case .notAuthorized:
+            return "not authorized"
+        case .serverBusy:
+            return "server busy"
+        case .serverShuttingDown:
+            return "server shutting down"
+        case .keepAliveTimeout:
+            return "keepalive timeout"
+        case .sessionTakenOver:
+            return "session taken over"
+        case .topicFilterInvalid:
+            return "topic filter invalid"
+        case .topicNameInvalid:
+            return "topic name invalid"
+        case .receiveMaximumExceeded:
+            return "receive maximum exceeded"
+        case .topicAliasInvalid:
+            return "topic alias invalid"
+        case .packetTooLarge:
+            return "packet too large"
+        case .messageRateTooHigh:
+            return "message rate too high"
+        case .quotaExceeded:
+            return "quota exceeded"
+        case .administrativeAction:
+            return "administrative action"
+        case .payloadFormatInvalid:
+            return "payload format invalid"
+        case .retainNotSupported:
+            return "retain not supported"
+        case .qosNotSupported:
+            return "QoS not supported"
+        case .useAnotherServer:
+            return "use another server"
+        case .serverMoved:
+            return "server moved"
+        case .sharedSubscriptionsNotSupported:
+            return "shared subscriptions not supported"
+        case .connectionRateExceeded:
+            return "connection rate exceeded"
+        case .maximumConnectTime:
+            return "maximum connect time"
+        case .subscriptionIdentifersNotSupported:
+            return "subscription"
+        case .wildcardSubscriptionsNotSupported:
+            return "wildcard subscriptions not supported"
         }
     }
 }
@@ -108,7 +108,7 @@ public struct DisconnectProperties: Properties {
 
         p.append(sessionExpiryInterval)
         p.append(reasonString)
-        for property in userProperties {p.append(property)}
+        for property in userProperties { p.append(property) }
         p.append(serverReference)
 
         return p
@@ -120,27 +120,32 @@ public struct DisconnectProperties: Properties {
         userProperties: [(String, String)]? = nil,
         serverReference: String? = nil
     ) {
-        if let sessionExpiryInterval { self.sessionExpiryInterval = Property.sessionExpiryInterval(sessionExpiryInterval)}
-        if let reasonString { self.reasonString = Property.reasonString(reasonString)}
-        if let userProperties {
-            for (key, value) in userProperties { self.userProperties.append(Property.userProperty(key, value))}
+        if let sessionExpiryInterval {
+            self.sessionExpiryInterval = Property.sessionExpiryInterval(sessionExpiryInterval)
         }
-        if let serverReference { self.serverReference = Property.serverReference(serverReference)}
+        if let reasonString { self.reasonString = Property.reasonString(reasonString) }
+        if let userProperties {
+            for (key, value) in userProperties {
+                self.userProperties.append(Property.userProperty(key, value))
+            }
+        }
+        if let serverReference { self.serverReference = Property.serverReference(serverReference) }
     }
 
     public init(from properties: [Property]) throws {
         for property in properties {
             switch property.identifier {
-                case .sessionExpiryInterval:
-                    try self.setProperty(&self.sessionExpiryInterval, property)
-                case .reasonString:
-                    try self.setProperty(&self.reasonString, property)
-                case .userProperty:
-                    self.userProperties.append(property)
-                case .serverReference:
-                    try self.setProperty(&self.serverReference, property)
-                default:
-                    throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectdProperty(inPacket: .DISCONNECT)))
+            case .sessionExpiryInterval:
+                try self.setProperty(&self.sessionExpiryInterval, property)
+            case .reasonString:
+                try self.setProperty(&self.reasonString, property)
+            case .userProperty:
+                self.userProperties.append(property)
+            case .serverReference:
+                try self.setProperty(&self.serverReference, property)
+            default:
+                throw MQTTError.protocolViolation(
+                    .malformedPacket(reason: .incorrectdProperty(inPacket: .DISCONNECT)))
             }
         }
     }
@@ -164,9 +169,10 @@ public struct DisconnectVariableHeader: Equatable, Sendable {
     }
 }
 
-public extension DisconnectVariableHeader {
-    func toString() -> String {
-        return "Disconnect reason code: \(self.disconnectReasonCode.toString()), Properties: \(self.properties.toString())"
+extension DisconnectVariableHeader {
+    public func toString() -> String {
+        return
+            "Disconnect reason code: \(self.disconnectReasonCode.toString()), Properties: \(self.properties.toString())"
     }
 }
 
@@ -180,8 +186,10 @@ public struct Disconnect: MQTTControlPacket {
 
     // v5
     public init(reasonCode: DisconnectReasonCode, properties: DisconnectProperties) {
-        let varHeader = DisconnectVariableHeader(disconnectReasonCode: reasonCode, properties: properties)
-        self.fixedHeader = .init(type: .DISCONNECT, flags: 0, remainingLength: UInt(varHeader.encode().count))
+        let varHeader = DisconnectVariableHeader(
+            disconnectReasonCode: reasonCode, properties: properties)
+        self.fixedHeader = .init(
+            type: .DISCONNECT, flags: 0, remainingLength: UInt(varHeader.encode().count))
         self.variableHeader = varHeader
     }
 
@@ -205,39 +213,28 @@ public struct Disconnect: MQTTControlPacket {
 
         let msglen = try decodeRemainigLength(bytes)
 
-        self.fixedHeader = FixedHeader(type: .DISCONNECT, flags: flags, remainingLength: msglen.value)
+        self.fixedHeader = FixedHeader(
+            type: .DISCONNECT, flags: flags, remainingLength: msglen.value)
 
         // varheader
         let remaining = Bytes(bytes[msglen.length + 1..<bytes.count])
 
         switch version {
-            case .v5:
-                guard let reasonCode = DisconnectReasonCode(rawValue: remaining[0]) else {
-                    throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidReturnCode))
-                }
+        case .v5:
+            guard let reasonCode = DisconnectReasonCode(rawValue: remaining[0]) else {
+                throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidReturnCode))
+            }
 
-                // Decode properties
-                var properties: [Property] = []
-                let propslen = try decodeRemainigLength(Bytes(remaining[0..<remaining.count]))
-                let props = Bytes(remaining[propslen.length + 1..<remaining.count])
-                var buf = ByteBuffer(bytes: props)
-                var bytesRead = 0
-                while bytesRead < propslen.value {
-                    guard let idByte: Byte = buf.readInteger(as: Byte.self) else {
-                        throw MQTTError.protocolViolation(.malformedPacket(reason: .decodeError("Unable to read byte at index: \(buf.readerIndex), from buffer: \(buf.debugDescription)")))
-                    }
-                    bytesRead += 1
-                    guard let id = PropertyIdentifier(rawValue: idByte) else {
-                        throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidPropertyIdentifier))
-                    }
-                    let property = try Property.decode(id: id, from: &buf, bytesRead: &bytesRead)
-                    properties.append(property)
-                }
-                self.variableHeader = try .init(disconnectReasonCode: reasonCode, properties: .init(from: properties))
-            case .v3:
-                if remaining.count > 0 {
-                    throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidRemainingLength))
-                }
+            // Decode properties
+            let propslen = try decodeRemainigLength(Bytes(remaining[0..<remaining.count]))
+            let props = Bytes(remaining[propslen.length + 1..<remaining.count])
+            let properties = try decodeProperties(from: props, length: propslen.value)
+            self.variableHeader = try .init(
+                disconnectReasonCode: reasonCode, properties: .init(from: properties))
+        case .v3:
+            if remaining.count > 0 {
+                throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidRemainingLength))
+            }
         }
     }
 
@@ -249,7 +246,7 @@ public struct Disconnect: MQTTControlPacket {
     }
 
     public func toString() -> String {
-        var s: String =  ""
+        var s: String = ""
         s.append(self.fixedHeader.toString())
         if let varHeader = self.variableHeader { s.append(varHeader.toString()) }
         return s
