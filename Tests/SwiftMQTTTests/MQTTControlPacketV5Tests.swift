@@ -169,10 +169,6 @@ import Testing
     #expect(disconnect.encode() == bytes)
 }
 
-// MARK: Pingreq
-
-// MARK: Pingresp
-
 // MARK: Puback
 @Test("Create v5 puback packet") func createV5Puback() {
     let props = PubackProperties(reasonString: "hello", userProperties: [("key", "value")])
@@ -217,6 +213,42 @@ import Testing
 }
 
 // MARK: Pubcomp
+@Test("Create v5 pubcomp packet") func createV5Pubcomp() {
+    let props = PubcompProperties(reasonString: "hello", userProperties: [("key", "value")])
+    let pubcomp = Pubcomp(packetId: 1, reasonCode: .success, properties: props)
+
+    #expect(pubcomp.fixedHeader == FixedHeader(type: .PUBCOMP, flags: 0, remainingLength: 25))
+    #expect(
+        pubcomp.varHeader
+            == PubcompVariableHeader(packetId: 1, reasonCode: .success, properties: props))
+}
+
+@Test("Decode v5 pubcomp packet") func decodV5Pubcomp() {
+    let props = PubcompProperties(reasonString: "hello", userProperties: [("key", "value")])
+    let bytes: Bytes = [
+        0x70, 0x19, 0x00, 0x01, 0x00, 0x15, 0x1f, 0x00, 0x05, 0x68, 0x65, 0x6C, 0x6C, 0x6F, 0x26,
+        0x00, 0x03, 0x6B, 0x65, 0x79, 0x00, 0x05, 0x76, 0x61, 0x6C, 0x75, 0x65,
+    ]
+
+    let pubcomp = try! Pubcomp(bytes: bytes, version: .v5)
+
+    #expect(pubcomp.fixedHeader == FixedHeader(type: .PUBCOMP, flags: 0, remainingLength: 25))
+    #expect(
+        pubcomp.varHeader
+            == PubcompVariableHeader(packetId: 1, reasonCode: .success, properties: props))
+}
+
+@Test("Encode v5 pubcomp packet") func encodeV5Pubcomp() {
+    let bytes: Bytes = [
+        0x70, 0x19, 0x00, 0x01, 0x00, 0x15, 0x1f, 0x00, 0x05, 0x68, 0x65, 0x6C, 0x6C, 0x6F, 0x26,
+        0x00, 0x03, 0x6B, 0x65, 0x79, 0x00, 0x05, 0x76, 0x61, 0x6C, 0x75, 0x65,
+    ]
+
+    let props = PubcompProperties(reasonString: "hello", userProperties: [("key", "value")])
+    let pubcomp = Pubcomp(packetId: 1, reasonCode: .success, properties: props)
+
+    #expect(pubcomp.encode() == bytes)
+}
 
 // MARK: Publish
 @Test("Create QoS 0 v5 publish packet") func createV5PublishQoS0() {
