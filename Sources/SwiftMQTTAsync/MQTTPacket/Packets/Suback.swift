@@ -147,12 +147,11 @@ extension Suback {
         let msgLen = try decodeRemainigLength(bytes)
 
         let remaining = Bytes(bytes[msgLen.length + 1..<bytes.count])
-        // let varHeaderBytes: Bytes = Bytes(bytes[2..<bytes.count])
-        let packetId = (UInt16(bytes[2]) << 8) | UInt16(bytes[3])
+        let packetId = (UInt16(remaining[0]) << 8) | UInt16(remaining[1])
         var subackProperties: SubackProperties? = nil
 
         if case .v5 = version {
-            let varHeaderBytes: Bytes = Bytes(bytes[3..<bytes.count])
+            let varHeaderBytes: Bytes = Bytes(remaining[1..<remaining.count])
             // Decode properties
             let propslen = try decodeRemainigLength(varHeaderBytes)
             let props = Bytes(varHeaderBytes[propslen.length + 1..<2 + Int(propslen.value)])

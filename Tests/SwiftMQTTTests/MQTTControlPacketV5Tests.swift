@@ -506,6 +506,43 @@ import Testing
     #expect(subscribe.encode() == bytes)
 }
 // MARK: Unsuback
+@Test("Create v5 unsuback packet") func createV5Unsuback() {
+    let props = UnsubackProperties(reasonString: "hello", userProperties: [("key", "value")])
+    let unsuback = Unsuback(packetId: 1, properties: props, reasonCodes: [.success, .success])
+
+    #expect(unsuback.fixedHeader == FixedHeader(type: .UNSUBACK, flags: 0, remainingLength: 26))
+    #expect(unsuback.varHeader == UnsubackVariableHeader(packetId: 1, properties: props))
+    #expect(unsuback.payload == UnsubackPayload(reasonCodes: [.success, .success]))
+}
+
+@Test("Decode v5 unsuback payload") func decodeV5Unsuback() {
+    let bytes: Bytes = [
+        0xb0, 0x1a, 0x00, 0x01, 0x15, 0x1f,
+        0x00, 0x05, 0x68, 0x65, 0x6C, 0x6C, 0x6F, 0x26,
+        0x00, 0x03, 0x6B, 0x65, 0x79, 0x00, 0x05, 0x76, 0x61, 0x6C, 0x75, 0x65,
+        0x00, 0x00,
+    ]
+    let unsuback = try! Unsuback(bytes: bytes, version: .v5)
+
+    let props = UnsubackProperties(reasonString: "hello", userProperties: [("key", "value")])
+    #expect(unsuback.fixedHeader == FixedHeader(type: .UNSUBACK, flags: 0, remainingLength: 26))
+    #expect(unsuback.varHeader == UnsubackVariableHeader(packetId: 1, properties: props))
+    #expect(unsuback.payload == UnsubackPayload(reasonCodes: [.success, .success]))
+}
+
+@Test("Encode v5 unsuback packet") func encodeV5Unsuback() {
+    let props = UnsubackProperties(reasonString: "hello", userProperties: [("key", "value")])
+    let unsuback = Unsuback(packetId: 1, properties: props, reasonCodes: [.success, .success])
+
+    let bytes: Bytes = [
+        0xb0, 0x1a, 0x00, 0x01, 0x15, 0x1f,
+        0x00, 0x05, 0x68, 0x65, 0x6C, 0x6C, 0x6F, 0x26,
+        0x00, 0x03, 0x6B, 0x65, 0x79, 0x00, 0x05, 0x76, 0x61, 0x6C, 0x75, 0x65,
+        0x00, 0x00,
+    ]
+
+    #expect(unsuback.encode() == bytes)
+}
 
 // MARK: Unsubscribe
 @Test("Create v5 unsubscribe packet") func createV5Unsubscribe() {
