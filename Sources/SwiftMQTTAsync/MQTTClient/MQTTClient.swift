@@ -8,8 +8,6 @@ actor MQTTClient {
 
     private let internalEventStream: AsyncStream<MQTTInternalEvent>
     private let internalCommandStream: AsyncStream<MQTTInternalCommand>
-    // public let eventStream: AsyncStream<MQTTEvent>
-
 
     private let session: MQTTSession
     private let connection: MQTTConnection
@@ -18,9 +16,19 @@ actor MQTTClient {
     private var keepAliveTask: Task<Void, Never>?
 
     private let version: Version
+    private let connectProperties: ConnectProperties?
+    private let willProperties: WillProperties?
 
-    init(version: Version, clientId: String, host: String, port: Int, config: Config, eventBus: MQTTEventBus<MQTTEvent>) {
+    init(
+        version: Version, connectProperties: ConnectProperties? = nil,
+        willProperties: WillProperties? = nil, clientId: String, host: String,
+        port: Int,
+        config: Config,
+        eventBus: MQTTEventBus<MQTTEvent>
+    ) {
         self.version = version
+        self.connectProperties = connectProperties
+        self.willProperties = willProperties
         self.clientId = clientId
         self.config = config
 
@@ -29,18 +37,25 @@ actor MQTTClient {
         // var cont: AsyncStream<MQTTEvent>.Continuation!
 
         // TODO: Should probably let user define how many events to buffer
-        self.internalEventStream = AsyncStream(bufferingPolicy: .bufferingNewest(10)) { internalCont = $0 }
+        self.internalEventStream = AsyncStream(bufferingPolicy: .bufferingNewest(10)) {
+            internalCont = $0
+        }
         // self.eventStream = AsyncStream(bufferingPolicy: .bufferingNewest(10)) { cont = $0 }
 
         self.internalEventBus = MQTTEventBus<MQTTInternalEvent>(continuation: internalCont)
         // self.eventBus = MQTTEventBus<MQTTEvent>(continuation: cont)
         self.eventBus = eventBus
 
-        self.internalCommandStream = AsyncStream(bufferingPolicy: .bufferingNewest(10)) { internalCommandCont = $0 }
-        self.internalCommandBus = MQTTEventBus<MQTTInternalCommand>(continuation: internalCommandCont )
+        self.internalCommandStream = AsyncStream(bufferingPolicy: .bufferingNewest(10)) {
+            internalCommandCont = $0
+        }
+        self.internalCommandBus = MQTTEventBus<MQTTInternalCommand>(
+            continuation: internalCommandCont)
 
-        self.session = MQTTSession(config: config, eventBus: eventBus, commandBus: internalCommandBus)
-        self.connection = MQTTConnection(host: host, port: port, eventBus: internalEventBus, version: self.version)
+        self.session = MQTTSession(
+            config: config, eventBus: eventBus, commandBus: internalCommandBus)
+        self.connection = MQTTConnection(
+            host: host, port: port, eventBus: internalEventBus, version: self.version)
 
         self.idAllocator = .init()
 
@@ -55,30 +70,38 @@ actor MQTTClient {
         Task {
             for await command in self.internalCommandStream {
                 switch command {
-                    case .send(let packet):
-                        // should handle error here
-                        try? await self.send(packet)
-                    case .disconnect(let error):
-                        await self.disconnect(with: error)
+                case .send(let packet):
+                    // should handle error here
+                    try? await self.send(packet)
+                case .disconnect(let error):
+                    await self.disconnect(with: error)
                 }
             }
         }
     }
 }
 
+// MARK: Connect
 extension MQTTClient {
     func connect() async throws {
         try await self.connectLoop()
         self.startKeepAlive()
     }
 
-    private func tryConnect() async throws {
+    private func tryConnect()
+        async throws
+    {
         try await self.connection.connect()
-        try await self.send(Connect(version: self.version, clientId: self.clientId, keepAlive: 60))
+        try await self.send(
+            Connect(
+                version: self.version, clientId: self.clientId, keepAlive: 60,
+                properties: self.connectProperties, willProperties: self.willProperties))
         try await self.session.awaitConack()
     }
 
-    private func connectLoop() async throws {
+    private func connectLoop()
+        async throws
+    {
         var attempts = 0
 
         while attempts <= self.config.maxRetries {
@@ -110,72 +133,119 @@ extension MQTTClient {
 
 // MARK: Publish
 extension MQTTClient {
-    @discardableResult func publish(bytes: Bytes, qos: QoS, topic: String) async throws -> Publish{
-        let publish = switch qos {
+    @discardableResult func publish(
+        bytes: Bytes, qos: QoS, topic: String, duplicate: Bool = false, retain: Bool = false,
+        properties: PublishProperties? = nil
+    ) async throws -> Publish {
+        let publish =
+            switch qos {
             case .ExactlyOnce:
-                try await constructQoS2Publish(bytes: bytes, topic: topic)
+                try await constructQoS2Publish(
+                    bytes: bytes, topic: topic, duplicate: duplicate, retain: retain,
+                    properties: properties)
             case .AtLeastOnce:
-                try await constructQoS1Publish(bytes: bytes, topic: topic)
+                try await constructQoS1Publish(
+                    bytes: bytes, topic: topic, duplicate: duplicate, retain: retain,
+                    properties: properties)
             case .AtMostOnce:
-                try constructQoS0Publish(bytes: bytes, topic: topic)
-        }
+                try constructQoS0Publish(
+                    bytes: bytes, topic: topic, duplicate: duplicate, retain: retain,
+                    properties: properties)
+            }
 
         try await self.sendPublish(publish, qos: qos)
 
         return publish
     }
 
-    @discardableResult func publish(message: String, qos: QoS, topic: String) async throws -> Publish{
-        let publish = switch qos {
+    @discardableResult func publish(
+        message: String, qos: QoS, topic: String, duplicate: Bool = false, retain: Bool = false,
+        properties: PublishProperties? = nil
+    ) async throws
+        -> Publish
+    {
+        let publish =
+            switch qos {
             case .ExactlyOnce:
-                try await constructQoS2Publish(bytes: Bytes(message.utf8), topic: topic)
+                try await constructQoS2Publish(
+                    bytes: Bytes(message.utf8), topic: topic, duplicate: duplicate, retain: retain,
+                    properties: properties)
             case .AtLeastOnce:
-                try await constructQoS1Publish(bytes: Bytes(message.utf8), topic: topic)
+                try await constructQoS1Publish(
+                    bytes: Bytes(message.utf8), topic: topic, duplicate: duplicate, retain: retain,
+                    properties: properties)
             case .AtMostOnce:
-                try constructQoS0Publish(bytes: Bytes(message.utf8), topic: topic)
-        }
+                try constructQoS0Publish(
+                    bytes: Bytes(message.utf8), topic: topic, duplicate: duplicate, retain: retain,
+                    properties: properties)
+            }
 
         try await self.sendPublish(publish, qos: qos)
 
         return publish
     }
 
-    private func sendPublish(_ publish: Publish, qos: QoS) async throws {
+    private func sendPublish(
+        _ publish: Publish, qos: QoS
+    ) async throws {
         try await self.send(publish)
         switch qos {
-            case .ExactlyOnce:
-                guard let packetId = publish.variableHeader.packetId else {
-                    throw MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))
-                }
-                try await self.session.awaitPubrec(packetId: packetId)
-                try await self.send(Pubrel(packetId: packetId))
-                try await self.session.awaitPubComp(packetId: packetId)
-            case .AtLeastOnce:
-                guard let packetId = publish.variableHeader.packetId else {
-                    throw MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))
-                }
-                try await session.awaitPuback(packetId: packetId)
-            case .AtMostOnce:
-                break
+        case .ExactlyOnce:
+            guard let packetId = publish.variableHeader.packetId else {
+                throw MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))
+            }
+            // TODO: catch missing packateId error and throw otherwise
+            // - need to send back pubrel with error code and then throw error
+            try await self.session.awaitPubrec(packetId: packetId)
+            try await self.send(Pubrel(packetId: packetId))
+            try await self.session.awaitPubComp(packetId: packetId)
+        case .AtLeastOnce:
+            guard let packetId = publish.variableHeader.packetId else {
+                throw MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))
+            }
+            try await session.awaitPuback(packetId: packetId)
+        case .AtMostOnce:
+            break
         }
     }
 
-    private func constructQoS2Publish(bytes: Bytes, topic: String) async throws -> Publish {
+    private func constructQoS2Publish(
+        bytes: Bytes, topic: String, duplicate: Bool = false, retain: Bool = false,
+        properties: PublishProperties? = nil
+    ) async throws -> Publish {
         let packetId = await self.idAllocator.next()
-        let publish = try Publish(topicName: topic, message: bytes, packetId: packetId, qos: .ExactlyOnce)
+        let publish = try Publish(
+            topicName: topic, message: bytes, packetId: packetId, duplicate: duplicate,
+            qos: .ExactlyOnce,
+            retain: retain, properties: properties
+        )
 
         return publish
     }
 
-    private func constructQoS1Publish(bytes: Bytes, topic: String) async throws -> Publish {
+    private func constructQoS1Publish(
+        bytes: Bytes, topic: String, duplicate: Bool = false, retain: Bool = false,
+        properties: PublishProperties? = nil
+    ) async throws -> Publish {
         let packetId = await self.idAllocator.next()
-        let publish = try Publish(topicName: topic, message: bytes, packetId: packetId, qos: .AtLeastOnce)
+        let publish = try Publish(
+            topicName: topic, message: bytes, packetId: packetId, duplicate: duplicate,
+            qos: .AtLeastOnce,
+            retain: retain, properties: properties
+        )
 
         return publish
     }
 
-    private func constructQoS0Publish(bytes: Bytes, topic: String) throws -> Publish {
-        let publish = try Publish(topicName: topic, message: bytes, qos: .AtMostOnce)
+    private func constructQoS0Publish(
+        bytes: Bytes, topic: String, duplicate: Bool = false, retain: Bool = false,
+        properties: PublishProperties? = nil
+    ) throws -> Publish {
+        let publish = try Publish(
+            topicName: topic, message: bytes, duplicate: duplicate,
+            qos: .AtMostOnce,
+            retain: retain, properties: properties
+        )
 
         return publish
     }
@@ -183,9 +253,11 @@ extension MQTTClient {
 
 // MARK: Subscribe
 extension MQTTClient {
-    @discardableResult func subscribe(to topics: [TopicFilter]) async throws -> Subscribe {
+    @discardableResult func subscribe(
+        to topics: [TopicFilter], properties: SubscribeProperties? = nil
+    ) async throws -> Subscribe {
         let packetId = await self.idAllocator.next()
-        let subscribePacket = Subscribe(packetId: packetId, topics: topics)
+        let subscribePacket = Subscribe(packetId: packetId, properties: properties, topics: topics)
 
         try await self.send(subscribePacket)
         try await self.session.awaitSuback(packetId: packetId)
@@ -193,10 +265,15 @@ extension MQTTClient {
     }
 
     private func subscribeToTopics() async throws {
-        let topics = await self.session.getSubscriptions()
-        if topics.count <= 0 { return }
+        // let topics = await self.session.getSubscriptions()
+        // if topics.count <= 0 { return }
 
-        try await self.subscribe(to: topics)
+        // try await self.subscribe(to: topics)
+        let subs = await self.session.getSubscriptions()
+        if subs.count <= 0 { return }
+        for (properties, topicFilters) in subs {
+            try await self.subscribe(to: topicFilters, properties: properties)
+        }
     }
 }
 
