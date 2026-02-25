@@ -150,8 +150,6 @@ extension Pubrel {
                 let props = Bytes(remaining[propslen.length + 1..<2 + Int(propslen.value)])
                 let properties = try decodeProperties(from: props, length: propslen.value)
                 pubrelProperties = try .init(from: properties)
-            } else {
-                pubrelReasonCode = .success
             }
         }
 

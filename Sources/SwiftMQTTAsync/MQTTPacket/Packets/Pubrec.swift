@@ -167,8 +167,6 @@ extension Pubrec {
                 let props = Bytes(remaining[propslen.length + 1..<2 + Int(propslen.value)])
                 let properties = try decodeProperties(from: props, length: propslen.value)
                 pubrecProperties = try .init(from: properties)
-            } else {
-                pubrecReasonCode = .success
             }
         }
 

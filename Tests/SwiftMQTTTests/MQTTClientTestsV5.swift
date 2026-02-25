@@ -332,7 +332,7 @@ struct MQTTClientTestsV5 {
         }
 
         let _ = try! await withTimeout(seconds: 1) {
-            try? await subscriber.subscribe(to: [.init(topic: "test/topic", qos: .AtMostOnce)])
+            try? await subscriber.subscribe(to: [.init(topic: "test/topic/v5", qos: .AtMostOnce)])
         }
 
         let packetTask = Task {
@@ -354,10 +354,10 @@ struct MQTTClientTestsV5 {
         }
 
         let pubPacket = try! Publish(
-            topicName: "test/topic", message: "hello", qos: .AtMostOnce,
+            topicName: "test/topic/v5", message: "hello", qos: .AtMostOnce,
             properties: PublishProperties())
 
-        try! await publisher.publish(message: "hello", qos: .AtMostOnce, topic: "test/topic")
+        try! await publisher.publish(message: "hello", qos: .AtMostOnce, topic: "test/topic/v5")
 
         let packet = try! await withTimeout(seconds: 5) {
             try await packetTask.value
@@ -369,177 +369,179 @@ struct MQTTClientTestsV5 {
         #expect(packet == pubPacket)
     }
 
-    // @Test("v5 QoS 1 publish and subscribe", .enabled(if: TestEnv.host != nil)) func v5qos1PubSub()
-    //     async throws
-    // {
-    //     let host = TestEnv.host!
-    //     let subscriber: MQTTClientV3 = .init(
-    //         clientId: "test-sub1", host: host, port: 1883, config: .init())
-    //     let publisher: MQTTClientV3 = .init(
-    //         clientId: "test-pub1", host: host, port: 1883, config: .init())
+    @Test("v5 QoS 1 publish and subscribe", .enabled(if: TestEnv.host != nil)) func v5qos1PubSub()
+        async throws
+    {
+        let host = TestEnv.host!
+        let subscriber: MQTTClientV5 = .init(
+            clientId: "test-sub1-v5", host: host, port: 1883, config: .init())
+        let publisher: MQTTClientV5 = .init(
+            clientId: "test-pub1-v5", host: host, port: 1883, config: .init())
 
-    //     let _ = try! await withTimeout(seconds: 1) {
-    //         try await publisher.connect()
-    //     }
+        let _ = try! await withTimeout(seconds: 1) {
+            try await publisher.connect()
+        }
 
-    //     let _ = try! await withTimeout(seconds: 1) {
-    //         try? await subscriber.connect()
-    //     }
+        let _ = try! await withTimeout(seconds: 1) {
+            try? await subscriber.connect()
+        }
 
-    //     let _ = try! await withTimeout(seconds: 1) {
-    //         try? await subscriber.subscribe(to: [.init(topic: "test/topic1", qos: .AtLeastOnce)])
-    //     }
+        let _ = try! await withTimeout(seconds: 1) {
+            try? await subscriber.subscribe(to: [.init(topic: "test/topic1/v5", qos: .AtLeastOnce)])
+        }
 
-    //     let packetTask = Task {
-    //         var packets: [any MQTTControlPacket] = []
-    //         for await event in subscriber.eventStream {
-    //             switch event {
-    //             case .received(let packet):
-    //                 switch packet {
-    //                 case .publish(let publish):
-    //                     packets.append(publish)
-    //                 default:
-    //                     break
-    //                 }
-    //             case .send(let packet):
-    //                 if packet.fixedHeader.type == .PUBACK {
-    //                     packets.append(packet)
-    //                     return packets
-    //                 }
-    //             default:
-    //                 break
-    //             }
-    //         }
+        let packetTask = Task {
+            var packets: [any MQTTControlPacket] = []
+            for await event in subscriber.eventStream {
+                switch event {
+                case .received(let packet):
+                    switch packet {
+                    case .publish(let publish):
+                        packets.append(publish)
+                    default:
+                        break
+                    }
+                case .send(let packet):
+                    if packet.fixedHeader.type == .PUBACK {
+                        packets.append(packet)
+                        return packets
+                    }
+                default:
+                    break
+                }
+            }
 
-    //         throw TestError.emptyPacketStream
-    //     }
+            throw TestError.emptyPacketStream
+        }
 
-    //     let publish = try! await publisher.publish(
-    //         message: "hello", qos: .AtLeastOnce, topic: "test/topic1")
-    //     guard let packetId = publish.variableHeader.packetId else {
-    //         throw MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))
-    //     }
+        let publish = try! await publisher.publish(
+            message: "hello", qos: .AtLeastOnce, topic: "test/topic1/v5")
+        guard let packetId = publish.variableHeader.packetId else {
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))
+        }
 
-    //     let packets = try! await withTimeout(seconds: 5) {
-    //         try await packetTask.value
-    //     }
+        let packets = try! await withTimeout(seconds: 5) {
+            try await packetTask.value
+        }
 
-    //     await publisher.stop()
-    //     await subscriber.stop()
+        await publisher.stop()
+        await subscriber.stop()
 
-    //     let testPublish = try! Publish(
-    //         topicName: "test/topic1", message: "hello", packetId: packetId, qos: .AtLeastOnce)
-    //     #expect(packets[0] as? Publish == testPublish)
-    //     #expect(packets[1] as? Puback == Puback(packetId: packetId))
-    // }
+        let testPublish = try! Publish(
+            topicName: "test/topic1/v5", message: "hello", packetId: packetId, qos: .AtLeastOnce,
+            properties: PublishProperties())
+        #expect(packets[0] as? Publish == testPublish)
+        #expect(packets[1] as? Puback == Puback(packetId: packetId))
+    }
 
-    // @Test("v5 QoS 2 publish and subscribe", .enabled(if: TestEnv.host != nil)) func v5qos2PubSub()
-    //     async throws
-    // {
-    //     let host = TestEnv.host!
-    //     let subscriber: MQTTClientV3 = .init(
-    //         clientId: "test-sub2", host: host, port: 1883, config: .init())
-    //     let publisher: MQTTClientV3 = .init(
-    //         clientId: "test-pub2", host: host, port: 1883, config: .init())
+    @Test("v5 QoS 2 publish and subscribe", .enabled(if: TestEnv.host != nil)) func v5qos2PubSub()
+        async throws
+    {
+        let host = TestEnv.host!
+        let subscriber: MQTTClientV5 = .init(
+            clientId: "test-sub2-v5", host: host, port: 1883, config: .init())
+        let publisher: MQTTClientV5 = .init(
+            clientId: "test-pub2-v5", host: host, port: 1883, config: .init())
 
-    //     let _ = try! await withTimeout(seconds: 1) {
-    //         try await publisher.connect()
-    //     }
+        let _ = try! await withTimeout(seconds: 1) {
+            try await publisher.connect()
+        }
 
-    //     let _ = try! await withTimeout(seconds: 1) {
-    //         try? await subscriber.connect()
-    //     }
+        let _ = try! await withTimeout(seconds: 1) {
+            try? await subscriber.connect()
+        }
 
-    //     let _ = try! await withTimeout(seconds: 1) {
-    //         try? await subscriber.subscribe(to: [.init(topic: "test/topic2", qos: .ExactlyOnce)])
-    //     }
+        let _ = try! await withTimeout(seconds: 1) {
+            try? await subscriber.subscribe(to: [.init(topic: "test/topic2/v5", qos: .ExactlyOnce)])
+        }
 
-    //     let packetTask = Task {
-    //         var packets: [any MQTTControlPacket] = []
-    //         for await event in subscriber.eventStream {
-    //             switch event {
-    //             case .received(let packet):
-    //                 switch packet {
-    //                 case .publish(let publish):
-    //                     packets.append(publish)
-    //                 case .pubrel(let pubrel):
-    //                     packets.append(pubrel)
-    //                 default:
-    //                     break
-    //                 }
-    //             case .send(let packet):
-    //                 switch packet.fixedHeader.type {
-    //                 case .PUBREC:
-    //                     packets.append(packet)
-    //                 case .PUBCOMP:
-    //                     packets.append(packet)
-    //                     return packets
-    //                 default:
-    //                     break
-    //                 }
-    //             default:
-    //                 break
-    //             }
-    //         }
+        let packetTask = Task {
+            var packets: [any MQTTControlPacket] = []
+            for await event in subscriber.eventStream {
+                switch event {
+                case .received(let packet):
+                    switch packet {
+                    case .publish(let publish):
+                        packets.append(publish)
+                    case .pubrel(let pubrel):
+                        packets.append(pubrel)
+                    default:
+                        break
+                    }
+                case .send(let packet):
+                    switch packet.fixedHeader.type {
+                    case .PUBREC:
+                        packets.append(packet)
+                    case .PUBCOMP:
+                        packets.append(packet)
+                        return packets
+                    default:
+                        break
+                    }
+                default:
+                    break
+                }
+            }
 
-    //         throw TestError.emptyPacketStream
-    //     }
+            throw TestError.emptyPacketStream
+        }
 
-    //     let publish = try! await publisher.publish(
-    //         message: "hello", qos: .ExactlyOnce, topic: "test/topic2")
-    //     guard let packetId = publish.variableHeader.packetId else {
-    //         throw MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))
-    //     }
+        let publish = try! await publisher.publish(
+            message: "hello", qos: .ExactlyOnce, topic: "test/topic2/v5")
+        guard let packetId = publish.variableHeader.packetId else {
+            throw MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))
+        }
 
-    //     let packets = try! await withTimeout(seconds: 5) {
-    //         try await packetTask.value
-    //     }
+        let packets = try! await withTimeout(seconds: 5) {
+            try await packetTask.value
+        }
 
-    //     await publisher.stop()
-    //     await subscriber.stop()
+        await publisher.stop()
+        await subscriber.stop()
 
-    //     let testPublish = try! Publish(
-    //         topicName: "test/topic2", message: "hello", packetId: packetId, qos: .ExactlyOnce)
-    //     // Cast and compare each packet in order
-    //     #expect(packets[0] as? Publish == testPublish)
-    //     #expect(packets[1] as? Pubrec == Pubrec(packetId: packetId))
-    //     #expect(packets[2] as? Pubrel == Pubrel(packetId: packetId))
-    //     #expect(packets[3] as? Pubcomp == Pubcomp(packetId: packetId))
-    // }
+        let testPublish = try! Publish(
+            topicName: "test/topic2/v5", message: "hello", packetId: packetId, qos: .ExactlyOnce,
+            properties: PublishProperties())
+        // Cast and compare each packet in order
+        #expect(packets[0] as? Publish == testPublish)
+        #expect(packets[1] as? Pubrec == Pubrec(packetId: packetId))
+        #expect(packets[2] as? Pubrel == Pubrel(packetId: packetId))
+        #expect(packets[3] as? Pubcomp == Pubcomp(packetId: packetId))
+    }
 
-    // @Test("v5 Disconnect client", .enabled(if: TestEnv.host != nil)) func v5testDisconnect() async {
-    //     let host = TestEnv.host!
-    //     let client: MQTTClientV3 = .init(
-    //         clientId: "test-disconnect-1", host: host, port: 1883, config: .init())
+    @Test("v5 Disconnect client", .enabled(if: TestEnv.host != nil)) func v5testDisconnect() async {
+        let host = TestEnv.host!
+        let client: MQTTClientV5 = .init(
+            clientId: "test-disconnect-1-v5", host: host, port: 1883, config: .init())
 
-    //     let _ = try! await withTimeout(seconds: 1) {
-    //         try await client.connect()
-    //     }
+        let _ = try! await withTimeout(seconds: 1) {
+            try await client.connect()
+        }
 
-    //     let packetTask = Task {
-    //         var packets: [any MQTTControlPacket] = []
+        let packetTask = Task {
+            var packets: [any MQTTControlPacket] = []
 
-    //         for try await event in client.eventStream {
-    //             switch event {
-    //             case .send(let packet):
-    //                 packets.append(packet)
+            for try await event in client.eventStream {
+                switch event {
+                case .send(let packet):
+                    packets.append(packet)
 
-    //             case .received(let packet):
-    //                 packets.append(packet.inner())
-    //             default:
-    //                 break
-    //             }
-    //         }
+                case .received(let packet):
+                    packets.append(packet.inner())
+                default:
+                    break
+                }
+            }
 
-    //         return packets
-    //     }
+            return packets
+        }
 
-    //     await client.stop()
+        await client.stop()
 
-    //     let packets = try! await withTimeout(seconds: 5) {
-    //         try await packetTask.value
-    //     }
+        let packets = try! await withTimeout(seconds: 5) {
+            try await packetTask.value
+        }
 
-    //     #expect(packets.last as? Disconnect == Disconnect())
-    // }
+        #expect(packets.last as? Disconnect == Disconnect())
+    }
 }

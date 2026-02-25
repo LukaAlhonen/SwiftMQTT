@@ -152,8 +152,6 @@ extension Pubcomp {
                 let props = Bytes(remaining[propslen.length + 1..<2 + Int(propslen.value)])
                 let properties = try decodeProperties(from: props, length: propslen.value)
                 pubcompProperties = try .init(from: properties)
-            } else {
-                pubcompReasonCode = .success
             }
         }
 

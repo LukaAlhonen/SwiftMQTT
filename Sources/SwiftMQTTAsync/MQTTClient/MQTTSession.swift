@@ -318,21 +318,35 @@ extension MQTTSession {
     }
 
     private func handlePuback(_ puback: Puback) {
+        var result: Result<Void, Error> = .success(())
+        if let reasonCode = puback.varHeader.reasonCode {
+            if case .success = reasonCode {
+                result = .success(())
+            } else if case .noMatchingSubscribers = reasonCode {
+                result = .success(())
+                self.eventBus.emit(.info("no matching subscribers"))
+            } else {
+                let error = MQTTError.protocolViolation(
+                    .operationRejected(reasonCode: reasonCode.rawValue, operation: .PUBACK))
+                result = .failure(error)
+                self.eventBus.emit(.error(error))
+            }
+        }
         let packetId = puback.varHeader.packetId
         guard let inflightTask = self.activeTasks.removeValue(forKey: packetId) else {
-            // should close connection here
-            self.eventBus.emit(.warning("Received puback for unknown packetId"))
+            self.commandBus.emit(
+                .disconnect(MQTTError.protocolViolation(.unexpectedPacket(packet: .PUBACK))))
             return
         }
 
-        inflightTask.timeout?.stop()
+        inflightTask.timeout?.stop(with: result)
     }
 
     private func handlePubrec(_ pubrec: Pubrec) {
         let packetId = pubrec.varHeader.packetId
         guard let inflightTask = self.activeTasks.removeValue(forKey: packetId) else {
-            // should close connection here
-            self.eventBus.emit(.warning("Received pubrec for unknown packetId"))
+            self.commandBus.emit(
+                .disconnect(MQTTError.protocolViolation(.unexpectedPacket(packet: .PUBREC))))
             return
         }
 
