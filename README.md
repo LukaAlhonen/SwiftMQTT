@@ -2,7 +2,7 @@
 
 # SwiftMQTTAsync
 
-SwiftMQTTAsync, as the name suggests, is an async MQTT client library for swift. The library works on macOS and linux and uses swift-nio under the hood. This package is currenlty in ealry-ish developement and currently only supports MQTTv3.1.1.
+SwiftMQTTAsync, as the name suggests, is an async MQTT client library for swift. The library works on macOS and linux and uses swift-nio under the hood. This package is currenlty in ealry-ish developement and supports both v3.1.1 (release 0.2.0) and v5 (release 1.0.0-beta).
 New features are constantly being added and are usually listed under the repo issues.
 
 ## Installation
