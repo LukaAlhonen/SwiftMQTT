@@ -74,7 +74,8 @@ actor MQTTSession {
             self.commandBus.emit(
                 .disconnect(
                     MQTTError.protocolViolation(
-                        .unexpectedPacket(packet: packet.inner().fixedHeader.type))))
+                        .unexpectedPacket(packet: packet.inner().fixedHeader.type)),
+                    reasonCode: .protocolError))
             return
         }
     }
@@ -128,7 +129,8 @@ extension MQTTSession {
             guard let packetId = publish.variableHeader.packetId else {
                 self.commandBus.emit(
                     .disconnect(
-                        MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))))
+                        MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId)),
+                        reasonCode: .malformedPacket))
                 return
             }
             // should define separate timeout for publish in config
@@ -141,7 +143,8 @@ extension MQTTSession {
             guard let packetId = publish.variableHeader.packetId else {
                 self.commandBus.emit(
                     .disconnect(
-                        MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))))
+                        MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId)),
+                        reasonCode: .malformedPacket))
                 return
             }
 
@@ -170,7 +173,8 @@ extension MQTTSession {
             self.commandBus.emit(
                 .disconnect(
                     MQTTError.protocolViolation(
-                        .unknownPacketId(packetId: puback.varHeader.packetId))))
+                        .unknownPacketId(packetId: puback.varHeader.packetId)),
+                    reasonCode: .malformedPacket))
             return
         }
     }
@@ -179,7 +183,9 @@ extension MQTTSession {
         let packetId = pubrec.varHeader.packetId
         guard self.passiveTasks.contains(packetId) else {
             self.commandBus.emit(
-                .disconnect(MQTTError.protocolViolation(.unknownPacketId(packetId: packetId))))
+                .disconnect(
+                    MQTTError.protocolViolation(.unknownPacketId(packetId: packetId)),
+                    reasonCode: .malformedPacket))
             return
         }
     }
@@ -189,7 +195,8 @@ extension MQTTSession {
             self.commandBus.emit(
                 .disconnect(
                     MQTTError.protocolViolation(
-                        .unknownPacketId(packetId: pubcomp.varHeader.packetId))))
+                        .unknownPacketId(packetId: pubcomp.varHeader.packetId)),
+                    reasonCode: .malformedPacket))
             return
         }
     }
@@ -239,7 +246,8 @@ extension MQTTSession {
                 guard let connackTask = self.connackTask else {
                     self.commandBus.emit(
                         .disconnect(
-                            MQTTError.unexpectedError("Connack timeoutTask should not be nil")))
+                            MQTTError.unexpectedError("Connack timeoutTask should not be nil"),
+                            reasonCode: .unspecifiedError))
                     return
                 }
 
@@ -256,7 +264,8 @@ extension MQTTSession {
                 guard let connackTask = self.connackTask else {
                     self.commandBus.emit(
                         .disconnect(
-                            MQTTError.unexpectedError("Connack timeoutTask should not be nil")))
+                            MQTTError.unexpectedError("Connack timeoutTask should not be nil"),
+                            reasonCode: .unspecifiedError))
                     return
                 }
 
@@ -273,7 +282,9 @@ extension MQTTSession {
     private func handlePingresp(_ pingresp: Pingresp) {
         guard let pingrespTask = self.pingrespTask else {
             self.commandBus.emit(
-                .disconnect(MQTTError.unexpectedError("Pingresp task should not be nil")))
+                .disconnect(
+                    MQTTError.unexpectedError("Pingresp task should not be nil"),
+                    reasonCode: .unspecifiedError))
             return
         }
 
@@ -285,7 +296,9 @@ extension MQTTSession {
         let packetId = suback.varHeader.packetId
         guard let subackTask = self.activeTasks.removeValue(forKey: packetId) else {
             self.commandBus.emit(
-                .disconnect(MQTTError.protocolViolation(.unexpectedPacket(packet: .SUBACK))))
+                .disconnect(
+                    MQTTError.protocolViolation(.unexpectedPacket(packet: .SUBACK)),
+                    reasonCode: .protocolError))
             return
         }
         subackTask.timeout?.stop()
@@ -298,7 +311,8 @@ extension MQTTSession {
             guard let packetId = publish.variableHeader.packetId else {
                 self.commandBus.emit(
                     .disconnect(
-                        MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))))
+                        MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId)),
+                        reasonCode: .malformedPacket))
                 return
             }
             self.commandBus.emit(.send(Pubrec(packetId: packetId)))
@@ -307,7 +321,8 @@ extension MQTTSession {
             guard let packetId = publish.variableHeader.packetId else {
                 self.commandBus.emit(
                     .disconnect(
-                        MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId))))
+                        MQTTError.protocolViolation(.malformedPacket(reason: .missingPacketId)),
+                        reasonCode: .malformedPacket))
                 return
             }
             self.commandBus.emit(.send(Puback(packetId: packetId)))
@@ -335,7 +350,9 @@ extension MQTTSession {
         let packetId = puback.varHeader.packetId
         guard let inflightTask = self.activeTasks.removeValue(forKey: packetId) else {
             self.commandBus.emit(
-                .disconnect(MQTTError.protocolViolation(.unexpectedPacket(packet: .PUBACK))))
+                .disconnect(
+                    MQTTError.protocolViolation(.unexpectedPacket(packet: .PUBACK)),
+                    reasonCode: .protocolError))
             return
         }
 
@@ -346,7 +363,9 @@ extension MQTTSession {
         let packetId = pubrec.varHeader.packetId
         guard let inflightTask = self.activeTasks.removeValue(forKey: packetId) else {
             self.commandBus.emit(
-                .disconnect(MQTTError.protocolViolation(.unexpectedPacket(packet: .PUBREC))))
+                .disconnect(
+                    MQTTError.protocolViolation(.unexpectedPacket(packet: .PUBREC)),
+                    reasonCode: .protocolError))
             return
         }
 
@@ -357,7 +376,9 @@ extension MQTTSession {
         let packetId = pubrel.varHeader.packetId
         guard self.passiveTasks.contains(packetId) else {
             self.commandBus.emit(
-                .disconnect(MQTTError.protocolViolation(.unexpectedPacket(packet: .PUBREL))))
+                .disconnect(
+                    MQTTError.protocolViolation(.unexpectedPacket(packet: .PUBREL)),
+                    reasonCode: .protocolError))
             return
         }
         self.commandBus.emit(.send(Pubcomp(packetId: packetId)))
@@ -367,7 +388,9 @@ extension MQTTSession {
         let packetId = pubcomp.varHeader.packetId
         guard let inflighTask = self.activeTasks.removeValue(forKey: packetId) else {
             self.commandBus.emit(
-                .disconnect(MQTTError.protocolViolation(.unexpectedPacket(packet: .PUBCOMP))))
+                .disconnect(
+                    MQTTError.protocolViolation(.unexpectedPacket(packet: .PUBCOMP)),
+                    reasonCode: .protocolError))
             return
         }
 
@@ -397,7 +420,9 @@ extension MQTTSession {
         let packetId = unsuback.varHeader.packetId
         guard let inflightTask = self.activeTasks.removeValue(forKey: packetId) else {
             self.commandBus.emit(
-                .disconnect(MQTTError.protocolViolation(.unexpectedPacket(packet: .UNSUBACK))))
+                .disconnect(
+                    MQTTError.protocolViolation(.unexpectedPacket(packet: .UNSUBACK)),
+                    reasonCode: .protocolError))
             return
         }
 

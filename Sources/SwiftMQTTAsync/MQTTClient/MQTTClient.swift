@@ -34,16 +34,13 @@ actor MQTTClient {
 
         var internalCont: AsyncStream<MQTTInternalEvent>.Continuation!
         var internalCommandCont: AsyncStream<MQTTInternalCommand>.Continuation!
-        // var cont: AsyncStream<MQTTEvent>.Continuation!
 
         // TODO: Should probably let user define how many events to buffer
         self.internalEventStream = AsyncStream(bufferingPolicy: .bufferingNewest(10)) {
             internalCont = $0
         }
-        // self.eventStream = AsyncStream(bufferingPolicy: .bufferingNewest(10)) { cont = $0 }
 
         self.internalEventBus = MQTTEventBus<MQTTInternalEvent>(continuation: internalCont)
-        // self.eventBus = MQTTEventBus<MQTTEvent>(continuation: cont)
         self.eventBus = eventBus
 
         self.internalCommandStream = AsyncStream(bufferingPolicy: .bufferingNewest(10)) {
@@ -71,10 +68,13 @@ actor MQTTClient {
             for await command in self.internalCommandStream {
                 switch command {
                 case .send(let packet):
-                    // should handle error here
-                    try? await self.send(packet)
-                case .disconnect(let error):
-                    await self.disconnect(with: error)
+                    do {
+                        try await self.send(packet)
+                    } catch {
+                        self.eventBus.emit(.error(error))
+                    }
+                case .disconnect(let error, let reasonCode):
+                    await self.disconnect(with: error, reasonCode: reasonCode)
                 }
             }
         }
@@ -323,8 +323,10 @@ extension MQTTClient {
         await self.disconnect()
     }
 
-    private func disconnect(with error: (any Error)? = nil) async {
-        try? await self.send(Disconnect())
+    private func disconnect(with error: (any Error)? = nil, reasonCode: DisconnectReasonCode? = nil)
+        async
+    {
+        try? await self.send(Disconnect(reasonCode: reasonCode))
         try? await self.connection.close()
         if let error = error {
             self.eventBus.emit(.error(error))

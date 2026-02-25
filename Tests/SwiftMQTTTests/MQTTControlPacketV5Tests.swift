@@ -149,7 +149,7 @@ struct MQTTControlPacketV5Tests {
         #expect(
             disconnect.variableHeader
                 == DisconnectVariableHeader(
-                    disconnectReasonCode: .normalDisconnection,
+                    reasonCode: .normalDisconnection,
                     properties: DisconnectProperties(sessionExpiryInterval: 30)
                 )
         )
@@ -163,7 +163,7 @@ struct MQTTControlPacketV5Tests {
         #expect(
             disconnect.variableHeader
                 == DisconnectVariableHeader(
-                    disconnectReasonCode: .normalDisconnection,
+                    reasonCode: .normalDisconnection,
                     properties: DisconnectProperties(sessionExpiryInterval: 30)
                 )
         )

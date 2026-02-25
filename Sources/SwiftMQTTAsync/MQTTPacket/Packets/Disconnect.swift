@@ -152,18 +152,18 @@ public struct DisconnectProperties: Properties {
 }
 
 public struct DisconnectVariableHeader: Equatable, Sendable {
-    public var disconnectReasonCode: DisconnectReasonCode
-    public var properties: DisconnectProperties
+    public var reasonCode: DisconnectReasonCode?
+    public var properties: DisconnectProperties?
 
-    public init(disconnectReasonCode: DisconnectReasonCode, properties: DisconnectProperties) {
-        self.disconnectReasonCode = disconnectReasonCode
+    public init(reasonCode: DisconnectReasonCode? = nil, properties: DisconnectProperties? = nil) {
+        self.reasonCode = reasonCode
         self.properties = properties
     }
 
     public func encode() -> Bytes {
         var bytes: Bytes = []
-        bytes.append(self.disconnectReasonCode.rawValue)
-        bytes.append(contentsOf: self.properties.encode())
+        if let reasonCode { bytes.append(reasonCode.rawValue) }
+        bytes.append(contentsOf: self.properties?.encode() ?? [])
 
         return bytes
     }
@@ -171,26 +171,21 @@ public struct DisconnectVariableHeader: Equatable, Sendable {
 
 extension DisconnectVariableHeader {
     public func toString() -> String {
-        return
-            "Disconnect reason code: \(self.disconnectReasonCode.toString()), Properties: \(self.properties.toString())"
+        var s: [String] = []
+        if let reasonCode { s.append("Disconnect reason code: \(reasonCode.toString())") }
+        if let properties { s.append("Properties: \(properties.toString())") }
+        return s.joined(separator: ", ")
     }
 }
 
 public struct Disconnect: MQTTControlPacket {
     public var fixedHeader: FixedHeader
-    public var variableHeader: DisconnectVariableHeader?
+    public var variableHeader: DisconnectVariableHeader
 
-    public init() {
-        self.fixedHeader = .init(type: .DISCONNECT, flags: 0, remainingLength: 0)
-    }
-
-    // v5
-    public init(reasonCode: DisconnectReasonCode, properties: DisconnectProperties) {
-        let varHeader = DisconnectVariableHeader(
-            disconnectReasonCode: reasonCode, properties: properties)
+    public init(reasonCode: DisconnectReasonCode? = nil, properties: DisconnectProperties? = nil) {
+        self.variableHeader = .init(reasonCode: reasonCode, properties: properties)
         self.fixedHeader = .init(
-            type: .DISCONNECT, flags: 0, remainingLength: UInt(varHeader.encode().count))
-        self.variableHeader = varHeader
+            type: .DISCONNECT, flags: 0, remainingLength: UInt(self.variableHeader.encode().count))
     }
 
     public init(bytes: Bytes, version: Version) throws {
@@ -218,37 +213,41 @@ public struct Disconnect: MQTTControlPacket {
 
         // varheader
         let remaining = Bytes(bytes[msglen.length + 1..<bytes.count])
+        var reasonCode: DisconnectReasonCode? = nil
+        var disconnectProperties: DisconnectProperties? = nil
 
         switch version {
         case .v5:
-            guard let reasonCode = DisconnectReasonCode(rawValue: remaining[0]) else {
+            guard let r = DisconnectReasonCode(rawValue: remaining[0]) else {
                 throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidReturnCode))
             }
+            reasonCode = r
 
             // Decode properties
             let propslen = try decodeRemainigLength(Bytes(remaining[0..<remaining.count]))
             let props = Bytes(remaining[propslen.length + 1..<remaining.count])
             let properties = try decodeProperties(from: props, length: propslen.value)
-            self.variableHeader = try .init(
-                disconnectReasonCode: reasonCode, properties: .init(from: properties))
+            disconnectProperties = try DisconnectProperties(from: properties)
         case .v3:
             if remaining.count > 0 {
                 throw MQTTError.protocolViolation(.malformedPacket(reason: .invalidRemainingLength))
             }
         }
+        self.variableHeader = .init(
+            reasonCode: reasonCode, properties: disconnectProperties)
     }
 
     public func encode() -> Bytes {
         var bytes: Bytes = []
         bytes.append(contentsOf: self.fixedHeader.encode())
-        bytes.append(contentsOf: self.variableHeader?.encode() ?? [])
+        bytes.append(contentsOf: self.variableHeader.encode())
         return bytes
     }
 
     public func toString() -> String {
         var s: String = ""
         s.append(self.fixedHeader.toString())
-        if let varHeader = self.variableHeader { s.append(varHeader.toString()) }
+        s.append(self.variableHeader.toString())
         return s
     }
 }
