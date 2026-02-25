@@ -8,9 +8,11 @@ actor MQTTConnection {
     private let host: String
     private let port: Int
 
+    private let version: Version
+
     private let eventBus: MQTTEventBus<MQTTInternalEvent>
 
-    public init(host: String, port: Int, eventBus: MQTTEventBus<MQTTInternalEvent>) {
+    public init(host: String, port: Int, eventBus: MQTTEventBus<MQTTInternalEvent>, version: Version) {
         if port <= 0 { fatalError("Invalid port number: \(port)") }
 
         self.host = host
@@ -19,10 +21,11 @@ actor MQTTConnection {
         self.eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
 
         self.eventBus = eventBus
+        self.version = version
     }
 
     func connect() async throws {
-        let handler = MQTTConnectionHandler()
+        let handler = MQTTConnectionHandler(version: self.version)
 
         // init handlers
         handler.handleChannelActive = {

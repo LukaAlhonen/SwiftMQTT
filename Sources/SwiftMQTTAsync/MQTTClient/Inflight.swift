@@ -77,8 +77,8 @@ final class TimeoutTask: @unchecked Sendable {
         }
     }
 
-    func stop() {
-        self.finish(result: .success(()))
+    func stop(with result: Result<Void, Error> = .success(())) {
+        self.finish(result: result)
     }
 
     func wait() async throws {

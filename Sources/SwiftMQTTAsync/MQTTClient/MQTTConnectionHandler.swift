@@ -3,13 +3,17 @@ import NIOCore
 final class MQTTConnectionHandler: ChannelInboundHandler, @unchecked Sendable {
     typealias InboundIn = ByteBuffer
 
-    private var parser = PacketParser()
+    private var parser: PacketParser
 
     var handleReceive: ((MQTTPacket) -> Void)?
     var handleSend: ((any MQTTControlPacket) -> Void)?
     var handleError: ((any Error) -> Void)?
     var handleChannelActive: (() -> Void)?
     var handleChannelInactive: (() -> Void)?
+
+    init(version: Version) {
+        self.parser = PacketParser(version: version)
+    }
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         let buffer = Self.unwrapInboundIn(data)
