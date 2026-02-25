@@ -1,25 +1,64 @@
-public struct TopicFilter: Hashable, Sendable {
-    public let topic: String
-    public let qos: QoS
-    public init(topic: String, qos: QoS) {
-        self.topic = topic
-        self.qos = qos
+public struct SubscribeProperties: Properties {
+    public var subscriptionIdentifier: Property?
+    public var userProperties: [Property] = []
+
+    internal var properties: [Property?] {
+        var p: [Property?] = []
+        p.append(self.subscriptionIdentifier)
+        for property in self.userProperties {
+            p.append(property)
+        }
+
+        return p
+    }
+
+    public init(subscriptionIdentifier: UInt? = nil, userProperties: [(String, String)]? = nil) {
+        if let subscriptionIdentifier {
+            self.subscriptionIdentifier = Property.subscriptionIdentifier(subscriptionIdentifier)
+        }
+        if let userProperties {
+            for (key, value) in userProperties {
+                self.userProperties.append(Property.userProperty(key, value))
+            }
+        }
+    }
+
+    public init(from properties: [Property]) throws {
+        for property in properties {
+            switch property.identifier {
+            case .subscriptionIdentifier:
+                try self.setProperty(&self.subscriptionIdentifier, property)
+            case .userProperty:
+                self.userProperties.append(property)
+            default:
+                throw MQTTError.protocolViolation(
+                    .malformedPacket(reason: .incorrectdProperty(inPacket: .SUBSCRIBE)))
+            }
+        }
     }
 }
 
 public struct SubscribeVariableHeader: Equatable, Sendable {
     public var packetId: UInt16
+    public var properties: SubscribeProperties?
 
-    public init(packetId: UInt16) {
+    public init(packetId: UInt16, properties: SubscribeProperties? = nil) {
         self.packetId = packetId
+        self.properties = properties
     }
 
     public func encode() -> Bytes {
-        return encodeUInt16(self.packetId)
+        var bytes: Bytes = []
+
+        bytes.append(contentsOf: encodeUInt16(self.packetId))
+        bytes.append(contentsOf: self.properties?.encode() ?? [])
+        return bytes
     }
 
     public func toString() -> String {
-        return "Packet ID: \(self.packetId)"
+        var s: String = "Packet ID: \(self.packetId)"
+        if let properties { s.append("Properties: \(properties.toString())") }
+        return s
     }
 }
 
@@ -34,9 +73,7 @@ public struct SubscribePayload: Equatable, Sendable {
         var data: Bytes = []
 
         for topicFilter in self.topics {
-            data.append(contentsOf: encodeUInt16(UInt16(topicFilter.topic.utf8.count)))
-            data.append(contentsOf: topicFilter.topic.utf8)
-            data.append(topicFilter.qos.rawValue)
+            data.append(contentsOf: topicFilter.encode())
         }
 
         return data
@@ -53,8 +90,9 @@ public struct Subscribe: MQTTControlPacket {
     public var varHeader: SubscribeVariableHeader
     public var payload: SubscribePayload
 
-    public init(packetId: UInt16 = 1, topics: [TopicFilter]) {
-        self.varHeader = SubscribeVariableHeader(packetId: packetId)
+    public init(packetId: UInt16 = 1, properties: SubscribeProperties? = nil, topics: [TopicFilter])
+    {
+        self.varHeader = SubscribeVariableHeader(packetId: packetId, properties: properties)
         self.payload = SubscribePayload(topics: topics)
         self.fixedHeader = FixedHeader(
             type: .SUBSCRIBE, flags: 0b0010,

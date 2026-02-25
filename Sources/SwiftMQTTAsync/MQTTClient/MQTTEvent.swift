@@ -16,5 +16,5 @@ enum MQTTInternalEvent: Sendable {
 
 enum MQTTInternalCommand: Sendable {
     case send(any MQTTControlPacket)
-    case disconnect(Error?)
+    case disconnect(Error?, reasonCode: DisconnectReasonCode? = nil)
 }
