@@ -20,7 +20,7 @@ public struct ConnectProperties: Properties {
         p.append(topicAliasMaximum)
         p.append(requestResponseInformation)
         p.append(requestProblemInformation)
-        for property in userProperties {p.append(property)}
+        for property in userProperties { p.append(property) }
         p.append(authenticationMethod)
         p.append(authenticationData)
 
@@ -38,42 +38,61 @@ public struct ConnectProperties: Properties {
         authenticationMethod: String? = nil,
         authenticationData: Bytes? = nil
     ) {
-        if let sessionExpiryInterval { self.sessionExpiryInterval = Property.sessionExpiryInterval(sessionExpiryInterval) }
-        if let receiveMaximum {self.receiveMaximum = Property.receiveMaximum(receiveMaximum)}
-        if let maximumPacketSize {self.maximumPacketSize = Property.maximumPacketSize(maximumPacketSize)}
-        if let topicAliasMaximum {self.topicAliasMaximum = Property.topicAliasMaximum(topicAliasMaximum)}
-        if let requestResponseInformation {self.requestResponseInformation = Property.requestResponseInformation(requestResponseInformation)}
-        if let requestProblemInformation {self.requestProblemInformation = Property.requestProblemInformation(requestProblemInformation)}
-        if let userProperties {
-            for (key, value) in userProperties { self.userProperties.append(Property.userProperty(key, value))}
+        if let sessionExpiryInterval {
+            self.sessionExpiryInterval = Property.sessionExpiryInterval(sessionExpiryInterval)
         }
-        if let authenticationMethod {self.authenticationMethod = Property.authenticationMethod(authenticationMethod)}
-        if let authenticationData {self.authenticationData = Property.authenticationData(authenticationData)}
+        if let receiveMaximum { self.receiveMaximum = Property.receiveMaximum(receiveMaximum) }
+        if let maximumPacketSize {
+            self.maximumPacketSize = Property.maximumPacketSize(maximumPacketSize)
+        }
+        if let topicAliasMaximum {
+            self.topicAliasMaximum = Property.topicAliasMaximum(topicAliasMaximum)
+        }
+        if let requestResponseInformation {
+            self.requestResponseInformation = Property.requestResponseInformation(
+                requestResponseInformation)
+        }
+        if let requestProblemInformation {
+            self.requestProblemInformation = Property.requestProblemInformation(
+                requestProblemInformation)
+        }
+        if let userProperties {
+            for (key, value) in userProperties {
+                self.userProperties.append(Property.userProperty(key, value))
+            }
+        }
+        if let authenticationMethod {
+            self.authenticationMethod = Property.authenticationMethod(authenticationMethod)
+        }
+        if let authenticationData {
+            self.authenticationData = Property.authenticationData(authenticationData)
+        }
     }
 
     public init(from properties: [Property]) throws {
         for property in properties {
             switch property.identifier {
-                case .sessionExpiryInterval:
-                    try self.setProperty(&self.sessionExpiryInterval, property)
-                case .receiveMaximum:
-                    try self.setProperty(&self.receiveMaximum, property)
-                case .maximumPacketSize:
-                    try self.setProperty(&self.maximumPacketSize, property)
-                case .topicAliasMaximum:
-                    try self.setProperty(&self.topicAliasMaximum, property)
-                case .requestResponseInformation:
-                    try self.setProperty(&self.requestResponseInformation, property)
-                case .requestProblemInformation:
-                    try self.setProperty(&self.requestProblemInformation, property)
-                case .userProperty:
-                    self.userProperties.append(property)
-                case.authenticationMethod:
-                    try self.setProperty(&self.authenticationMethod, property)
-                case .authenticationData:
-                    try self.setProperty(&self.authenticationData, property)
-                default:
-                    throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectdProperty(inPacket: .CONNACK)))
+            case .sessionExpiryInterval:
+                try self.setProperty(&self.sessionExpiryInterval, property)
+            case .receiveMaximum:
+                try self.setProperty(&self.receiveMaximum, property)
+            case .maximumPacketSize:
+                try self.setProperty(&self.maximumPacketSize, property)
+            case .topicAliasMaximum:
+                try self.setProperty(&self.topicAliasMaximum, property)
+            case .requestResponseInformation:
+                try self.setProperty(&self.requestResponseInformation, property)
+            case .requestProblemInformation:
+                try self.setProperty(&self.requestProblemInformation, property)
+            case .userProperty:
+                self.userProperties.append(property)
+            case .authenticationMethod:
+                try self.setProperty(&self.authenticationMethod, property)
+            case .authenticationData:
+                try self.setProperty(&self.authenticationData, property)
+            default:
+                throw MQTTError.protocolViolation(
+                    .malformedPacket(reason: .incorrectdProperty(inPacket: .CONNACK)))
             }
         }
     }
@@ -97,7 +116,7 @@ public struct WillProperties: Properties {
         p.append(contentType)
         p.append(responseTopic)
         p.append(correlationData)
-        for property in userProperties {p.append(property)}
+        for property in userProperties { p.append(property) }
 
         return p
     }
@@ -111,36 +130,45 @@ public struct WillProperties: Properties {
         correlationData: Bytes? = nil,
         userProperties: [(String, String)]? = nil
     ) {
-        if let willDelayInterval { self.willDelayInterval = Property.willDelayInterval(willDelayInterval) }
-        if let payloadFormatIndicator { self.payloadFormatIndicator = Property.payloadFormatIndicator(payloadFormatIndicator)}
-        if let messageExpiryInterval { self.messageExpiryInterval = Property.messageExpiryInterval(messageExpiryInterval)}
-        if let contentType { self.contentType = Property.contentType(contentType)}
+        if let willDelayInterval {
+            self.willDelayInterval = Property.willDelayInterval(willDelayInterval)
+        }
+        if let payloadFormatIndicator {
+            self.payloadFormatIndicator = Property.payloadFormatIndicator(payloadFormatIndicator)
+        }
+        if let messageExpiryInterval {
+            self.messageExpiryInterval = Property.messageExpiryInterval(messageExpiryInterval)
+        }
+        if let contentType { self.contentType = Property.contentType(contentType) }
         if let responseTopic { self.responseTopic = Property.responseTopic(responseTopic) }
         if let correlationData { self.correlationData = Property.correlationData(correlationData) }
         if let userProperties {
-            for (key, value) in userProperties {self.userProperties.append(Property.userProperty(key, value))}
+            for (key, value) in userProperties {
+                self.userProperties.append(Property.userProperty(key, value))
+            }
         }
     }
 
     public init(from properties: [Property]) throws {
         for property in properties {
             switch property.identifier {
-                case .willDelayInterval:
-                    try self.setProperty(&self.willDelayInterval, property)
-                case .payloadFormatIndicator:
-                    try self.setProperty(&self.payloadFormatIndicator, property)
-                case .messageExpiryInterval:
-                    try self.setProperty(&self.messageExpiryInterval, property)
-                case .contentType:
-                    try self.setProperty(&self.contentType, property)
-                case .responseTopic:
-                    try self.setProperty(&self.responseTopic, property)
-                case .correlationData:
-                    try self.setProperty(&self.correlationData, property)
-                case .userProperty:
-                    self.userProperties.append(property)
-                default:
-                    throw MQTTError.protocolViolation(.malformedPacket(reason: .incorrectdProperty(inPacket: .CONNECT)))
+            case .willDelayInterval:
+                try self.setProperty(&self.willDelayInterval, property)
+            case .payloadFormatIndicator:
+                try self.setProperty(&self.payloadFormatIndicator, property)
+            case .messageExpiryInterval:
+                try self.setProperty(&self.messageExpiryInterval, property)
+            case .contentType:
+                try self.setProperty(&self.contentType, property)
+            case .responseTopic:
+                try self.setProperty(&self.responseTopic, property)
+            case .correlationData:
+                try self.setProperty(&self.correlationData, property)
+            case .userProperty:
+                self.userProperties.append(property)
+            default:
+                throw MQTTError.protocolViolation(
+                    .malformedPacket(reason: .incorrectdProperty(inPacket: .CONNECT)))
             }
         }
     }
@@ -238,7 +266,7 @@ public struct ConnVariableHeader: Equatable, Sendable {
         data.append(self.protocolLevel.rawValue)
         data.append(self.connectFlags.encode())
         data.append(contentsOf: encodeUInt16(self.keepAlive))
-        if let properties = self.properties { data.append(contentsOf: properties.encode())}
+        if let properties = self.properties { data.append(contentsOf: properties.encode()) }
 
         return data
     }
@@ -257,7 +285,9 @@ public struct ConnPayload: Equatable, Sendable {
     public var username: String?
     public var password: Data?
 
-    public init(clientId: String, lwt: LWT? = nil, auth: Auth? = nil, willProperties: WillProperties? = nil) {
+    public init(
+        clientId: String, lwt: LWT? = nil, auth: Auth? = nil, willProperties: WillProperties? = nil
+    ) {
         self.clientId = clientId
         if let lwt = lwt {
             self.willTopic = lwt.topic
@@ -338,7 +368,8 @@ public struct Connect: MQTTControlPacket {
             properties: properties
         )
 
-        self.payload = ConnPayload(clientId: clientId, lwt: lwt, auth: auth, willProperties: willProperties)
+        self.payload = ConnPayload(
+            clientId: clientId, lwt: lwt, auth: auth, willProperties: willProperties)
         self.fixedHeader = FixedHeader(
             type: .CONNECT,
             flags: 0,

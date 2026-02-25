@@ -5,7 +5,7 @@ public final class MQTTClientV5: Sendable {
     public init(
         clientId: String, host: String, port: Int, config: Config,
         connectProperties: ConnectProperties = ConnectProperties(),
-        willProperties: WillProperties = WillProperties()
+        willProperties: WillProperties? = nil
     ) {
         var cont: AsyncStream<MQTTEvent>.Continuation!
         self.eventStream = AsyncStream(bufferingPolicy: .bufferingNewest(10)) { cont = $0 }
@@ -29,17 +29,18 @@ extension MQTTClientV5 {
 extension MQTTClientV5 {
     @discardableResult public func subscribe(
         to topics: [TopicFilter],
-        properties: SubscribeProperties = SubscribeProperties(
-            subscriptionIdentifier: nil, userProperties: nil)
+        properties: SubscribeProperties = SubscribeProperties()
     ) async throws -> Subscribe {
-        try await self.client.subscribe(to: topics)
+        try await self.client.subscribe(to: topics, properties: properties)
     }
 }
 
 // MARK: Unsubscribe
 extension MQTTClientV5 {
-    @discardableResult public func unsubscribe(from topics: [String]) async throws -> Unsubscribe {
-        return try await self.client.unsubscribe(from: topics)
+    @discardableResult public func unsubscribe(
+        from topics: [String], properties: UnsubscribeProperties = UnsubscribeProperties()
+    ) async throws -> Unsubscribe {
+        return try await self.client.unsubscribe(from: topics, properties: properties)
     }
 }
 
@@ -47,7 +48,7 @@ extension MQTTClientV5 {
 extension MQTTClientV5 {
     @discardableResult public func publish(
         bytes: Bytes, qos: QoS, topic: String, duplicate: Bool = false, retain: Bool = false,
-        properties: PublishProperties? = nil
+        properties: PublishProperties = PublishProperties()
     ) async throws
         -> Publish
     {
@@ -58,7 +59,7 @@ extension MQTTClientV5 {
 
     @discardableResult public func publish(
         message: String, qos: QoS, topic: String, duplicate: Bool = false, retain: Bool = false,
-        properties: PublishProperties? = nil
+        properties: PublishProperties? = PublishProperties()
     ) async throws
         -> Publish
     {

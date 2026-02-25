@@ -360,7 +360,26 @@ extension MQTTSession {
         inflighTask.timeout?.stop()
     }
 
+    // TODO: Should propably remove sub on successful unsub
     private func handleUnsuback(_ unsuback: Unsuback) {
+        // v5
+        var result: Result<Void, Error> = .success(())
+        if let reasonCodes = unsuback.payload?.reasonCodes {
+            for reasonCode in reasonCodes {
+                if case .success = reasonCode {
+                    result = .success(())
+                } else {
+                    let error =
+                        MQTTError.protocolViolation(
+                            .operationRejected(
+                                reasonCode: reasonCode.rawValue, operation: .UNSUBACK))
+
+                    result = .failure(error)
+                    self.eventBus.emit(.error(error))
+                }
+            }
+        }
+
         let packetId = unsuback.varHeader.packetId
         guard let inflightTask = self.activeTasks.removeValue(forKey: packetId) else {
             self.commandBus.emit(
@@ -368,7 +387,7 @@ extension MQTTSession {
             return
         }
 
-        inflightTask.timeout?.stop()
+        inflightTask.timeout?.stop(with: result)
     }
 }
 

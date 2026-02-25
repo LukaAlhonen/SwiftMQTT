@@ -279,9 +279,11 @@ extension MQTTClient {
 
 // MARK: Unsub
 extension MQTTClient {
-    @discardableResult func unsubscribe(from topics: [String]) async throws -> Unsubscribe {
+    @discardableResult func unsubscribe(
+        from topics: [String], properties: UnsubscribeProperties? = nil
+    ) async throws -> Unsubscribe {
         let packetId = await self.idAllocator.next()
-        let unsubpacket = Unsubscribe(packetId: packetId, topics: topics)
+        let unsubpacket = Unsubscribe(packetId: packetId, properties: properties, topics: topics)
 
         try await self.send(unsubpacket)
         try await self.session.awaitUnsuback(packetId: packetId)

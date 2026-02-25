@@ -21,6 +21,7 @@ enum ProtocolError: Error, Equatable {
     case unexpectedPacket(packet: MQTTControlPacketType)
     case unknownPacketId(packetId: UInt16)
     case invalidState(expected: String, acutal: String)
+    case operationRejected(reasonCode: Byte, operation: MQTTControlPacketType)
 }
 
 enum MalformedPacketReason: Error, Equatable {

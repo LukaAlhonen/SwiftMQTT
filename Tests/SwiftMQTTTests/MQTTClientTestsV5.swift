@@ -17,8 +17,7 @@ struct MQTTClientTestsV5 {
         let client = MQTTClientV5(
             clientId: "v5-test-client", host: host, port: 1883, config: config,
             connectProperties: .init(
-                sessionExpiryInterval: 10,
-                receiveMaximum: 100,
+                receiveMaximum: 10,
                 maximumPacketSize: 10000,
                 topicAliasMaximum: 10,
             )
@@ -49,170 +48,326 @@ struct MQTTClientTestsV5 {
             try await task.value
         }
 
-        for packet in packets {
-            print(packet.toString())
-        }
+        await client.stop()
 
         #expect(
             packets[0] as? Connect
-                == Connect(version: .v3, clientId: "test-client", keepAlive: config.keepAlive))
+                == Connect(
+                    version: .v5, clientId: "v5-test-client", keepAlive: config.keepAlive,
+                    properties: ConnectProperties(
+                        receiveMaximum: 10, maximumPacketSize: 10000, topicAliasMaximum: 10)))
+
+        let connack = packets[1] as? Connack
         #expect(
-            packets[1] as? Connack
-                == Connack(returnCode: .ConnectionAccepted, sessionPresent: false))
+            connack?.varHeader.connectReasonCode == .success
+        )
+        #expect(connack?.varHeader.sessionPresent == 0)
+        #expect(connack?.varHeader.connackProperties != nil)
         #expect(packets[2] as? Pingreq == Pingreq())
         #expect(packets[3] as? Pingresp == Pingresp())
         #expect(packets[4] as? Pingreq == Pingreq())
         #expect(packets[5] as? Pingresp == Pingresp())
     }
 
-    // @Test("v5 Subscribe", .enabled(if: TestEnv.host != nil)) func v5testSubscribe() async {
-    //     let host = TestEnv.host!
-    //     let client = MQTTClientV3(
-    //         clientId: "test-subscriber", host: host, port: 1883, config: .init())
+    @Test(
+        "v5 Connect to broker and check that keepalive works, empty properties",
+        .enabled(if: TestEnv.host != nil))
+    func v5connectClientEmptyProperties() async {
+        let host = TestEnv.host!
+        let config = Config(keepAlive: 2)
+        let client = MQTTClientV5(
+            clientId: "v5-test-client2", host: host, port: 1883, config: config,
+        )
 
-    //     let _ = try! await withTimeout(seconds: 1) {
-    //         try await client.connect()
-    //     }
+        let _ = try! await withTimeout(seconds: 1) {
+            try await client.connect()
+        }
 
-    //     let _ = try! await withTimeout(seconds: 1) {
-    //         try? await client.subscribe(to: [.init(topic: "test/subscribe", qos: .AtMostOnce)])
-    //     }
+        let task = Task {
+            var packets: [any MQTTControlPacket] = []
+            for await event in client.eventStream {
+                switch event {
+                case .received(let packet):
+                    packets.append(packet.inner())
+                case .send(let packet):
+                    packets.append(packet)
+                default:
+                    break
+                }
+                if packets.count >= 6 { return packets }
+            }
 
-    //     let task = Task {
-    //         var packets: [any MQTTControlPacket] = []
-    //         for await event in client.eventStream {
-    //             switch event {
-    //             case .received(let packet):
-    //                 switch packet {
-    //                 case .suback(let suback):
-    //                     packets.append(suback)
-    //                     return packets
-    //                 default:
-    //                     break
-    //                 }
-    //             case .send(let packet):
-    //                 if packet.fixedHeader.type == .SUBSCRIBE {
-    //                     packets.append(packet)
-    //                 }
-    //             default:
-    //                 break
-    //             }
-    //         }
+            throw TestError.emptyPacketStream
+        }
 
-    //         throw TestError.emptyPacketStream
-    //     }
+        let packets = try! await withTimeout(seconds: 10) {
+            try await task.value
+        }
 
-    //     let packets = try! await withTimeout(seconds: 10) {
-    //         try await task.value
-    //     }
+        await client.stop()
 
-    //     await client.stop()
+        #expect(
+            packets[0] as? Connect
+                == Connect(
+                    version: .v5, clientId: "v5-test-client2", keepAlive: config.keepAlive,
+                    properties: ConnectProperties()
+                )
+        )
+        let connack = packets[1] as? Connack
+        #expect(
+            connack?.varHeader.connectReasonCode == .success
+        )
+        #expect(connack?.varHeader.sessionPresent == 0)
+        #expect(connack?.varHeader.connackProperties != nil)
+        #expect(packets[2] as? Pingreq == Pingreq())
+        #expect(packets[3] as? Pingresp == Pingresp())
+        #expect(packets[4] as? Pingreq == Pingreq())
+        #expect(packets[5] as? Pingresp == Pingresp())
+    }
 
-    //     #expect(
-    //         packets[0] as? Subscribe
-    //             == Subscribe(packetId: 1, topics: [.init(topic: "test/subscribe", qos: .AtMostOnce)]))
-    //     #expect(packets[1] as? Suback == Suback(packetId: 1, returnCodes: [.QoS0]))
-    // }
+    @Test("v5 Subscribe", .enabled(if: TestEnv.host != nil)) func v5testSubscribe() async {
+        let host = TestEnv.host!
+        let client = MQTTClientV5(
+            clientId: "v5-test-subscriber", host: host, port: 1883, config: .init()
+        )
 
-    // @Test("v5 Unsub", .enabled(if: TestEnv.host != nil)) func v5testUnsub() async {
-    //     let host = TestEnv.host!
-    //     let client = MQTTClientV3(clientId: "test-unsub", host: host, port: 1883, config: .init())
+        let _ = try! await withTimeout(seconds: 1) {
+            try await client.connect()
+        }
 
-    //     let _ = try! await withTimeout(seconds: 1) {
-    //         try await client.connect()
-    //     }
+        let _ = try! await withTimeout(seconds: 1) {
+            try? await client.subscribe(
+                to: [.init(topic: "test/subscribe/v5", qos: .AtMostOnce)],
+                properties: .init(subscriptionIdentifier: 1))
+        }
 
-    //     let _ = try! await withTimeout(seconds: 1) {
-    //         try? await client.subscribe(to: [.init(topic: "test/unsub", qos: .AtMostOnce)])
-    //     }
+        let task = Task {
+            var packets: [any MQTTControlPacket] = []
+            for await event in client.eventStream {
+                switch event {
+                case .received(let packet):
+                    switch packet {
+                    case .suback(let suback):
+                        packets.append(suback)
+                        return packets
+                    default:
+                        break
+                    }
+                case .send(let packet):
+                    if packet.fixedHeader.type == .SUBSCRIBE {
+                        packets.append(packet)
+                    }
+                default:
+                    break
+                }
+            }
 
-    //     let task = Task {
-    //         var packets: [any MQTTControlPacket] = []
-    //         for await event in client.eventStream {
-    //             switch event {
-    //             case .received(let packet):
-    //                 switch packet {
-    //                 case .unsuback(let unsuback):
-    //                     packets.append(unsuback)
-    //                     return packets
-    //                 default:
-    //                     break
-    //                 }
-    //             case .send(let packet):
-    //                 if packet.fixedHeader.type == .UNSUBSCRIBE {
-    //                     packets.append(packet)
-    //                 }
-    //             default:
-    //                 break
-    //             }
-    //         }
+            throw TestError.emptyPacketStream
+        }
 
-    //         throw TestError.emptyPacketStream
-    //     }
+        let packets = try! await withTimeout(seconds: 10) {
+            try await task.value
+        }
 
-    //     let unsubPacket = try! await client.unsubscribe(from: ["test/unsub"])
+        await client.stop()
 
-    //     let packets = try! await withTimeout(seconds: 10) {
-    //         try await task.value
-    //     }
+        #expect(
+            packets[0] as? Subscribe
+                == Subscribe(
+                    packetId: 1, properties: .init(subscriptionIdentifier: 1),
+                    topics: [.init(topic: "test/subscribe/v5", qos: .AtMostOnce)])
+        )
+        #expect(
+            packets[1] as? Suback
+                == Suback(packetId: 1, properties: SubackProperties(), returnCodes: [.QoS0])
+        )
+    }
 
-    //     await client.stop()
+    @Test("v5 Subscribe, empty properties", .enabled(if: TestEnv.host != nil))
+    func v5testSubscribeEmptyProperties() async {
+        let host = TestEnv.host!
+        let client = MQTTClientV5(
+            clientId: "v5-test-subscriber2", host: host, port: 1883, config: .init())
 
-    //     #expect(packets[0] as? Unsubscribe == unsubPacket)
-    //     #expect(packets[1] as? Unsuback == Unsuback(packetId: unsubPacket.varHeader.packetId))
-    // }
+        let _ = try! await withTimeout(seconds: 1) {
+            try await client.connect()
+        }
 
-    // @Test("v5 QoS 0 publish and subscribe", .enabled(if: TestEnv.host != nil)) func v5qos0PubSub() async
-    // {
-    //     let host = TestEnv.host!
-    //     let subscriber: MQTTClientV3 = .init(
-    //         clientId: "test-sub", host: host, port: 1883, config: .init())
-    //     let publisher: MQTTClientV3 = .init(
-    //         clientId: "test-pub", host: host, port: 1883, config: .init())
+        let _ = try! await withTimeout(seconds: 1) {
+            try? await client.subscribe(to: [.init(topic: "test/subscribe/v5", qos: .AtMostOnce)])
+        }
 
-    //     let _ = try! await withTimeout(seconds: 1) {
-    //         try await publisher.connect()
-    //     }
+        let task = Task {
+            var packets: [any MQTTControlPacket] = []
+            for await event in client.eventStream {
+                switch event {
+                case .received(let packet):
+                    switch packet {
+                    case .suback(let suback):
+                        packets.append(suback)
+                        return packets
+                    default:
+                        break
+                    }
+                case .send(let packet):
+                    if packet.fixedHeader.type == .SUBSCRIBE {
+                        packets.append(packet)
+                    }
+                default:
+                    break
+                }
+            }
 
-    //     let _ = try! await withTimeout(seconds: 1) {
-    //         try? await subscriber.connect()
-    //     }
+            throw TestError.emptyPacketStream
+        }
 
-    //     let _ = try! await withTimeout(seconds: 1) {
-    //         try? await subscriber.subscribe(to: [.init(topic: "test/topic", qos: .AtMostOnce)])
-    //     }
+        let packets = try! await withTimeout(seconds: 10) {
+            try await task.value
+        }
 
-    //     let packetTask = Task {
-    //         for await event in subscriber.eventStream {
-    //             switch event {
-    //             case .received(let packet):
-    //                 switch packet {
-    //                 case .publish(let publish):
-    //                     return publish
-    //                 default:
-    //                     break
-    //                 }
-    //             default:
-    //                 break
-    //             }
-    //         }
+        await client.stop()
 
-    //         throw TestError.emptyPacketStream
-    //     }
+        #expect(
+            packets[0] as? Subscribe
+                == Subscribe(
+                    packetId: 1, properties: SubscribeProperties(),
+                    topics: [.init(topic: "test/subscribe/v5", qos: .AtMostOnce)]))
+        #expect(
+            packets[1] as? Suback
+                == Suback(packetId: 1, properties: SubackProperties(), returnCodes: [.QoS0]))
+    }
 
-    //     let pubPacket = try! Publish(topicName: "test/topic", message: "hello", qos: .AtMostOnce)
+    @Test("v5 Unsub", .enabled(if: TestEnv.host != nil)) func v5testUnsub() async {
+        let host = TestEnv.host!
+        let client = MQTTClientV5(
+            clientId: "test-unsub-v5", host: host, port: 1883, config: .init())
 
-    //     try! await publisher.publish(message: "hello", qos: .AtMostOnce, topic: "test/topic")
+        let _ = try! await withTimeout(seconds: 1) {
+            try await client.connect()
+        }
 
-    //     let packet = try! await withTimeout(seconds: 5) {
-    //         try await packetTask.value
-    //     }
+        let _ = try! await withTimeout(seconds: 1) {
+            try? await client.subscribe(to: [.init(topic: "test/unsub", qos: .AtMostOnce)])
+        }
 
-    //     await publisher.stop()
-    //     await subscriber.stop()
+        let task = Task {
+            var packets: [any MQTTControlPacket] = []
+            for await event in client.eventStream {
+                switch event {
+                case .received(let packet):
+                    switch packet {
+                    case .unsuback(let unsuback):
+                        packets.append(unsuback)
+                        return packets
+                    default:
+                        break
+                    }
+                case .send(let packet):
+                    if packet.fixedHeader.type == .UNSUBSCRIBE {
+                        packets.append(packet)
+                    }
+                default:
+                    break
+                }
+            }
 
-    //     #expect(packet == pubPacket)
-    // }
+            throw TestError.emptyPacketStream
+        }
+
+        let unsubPacket = try! await client.unsubscribe(from: ["test/unsub"])
+
+        let packets = try! await withTimeout(seconds: 10) {
+            try await task.value
+        }
+
+        await client.stop()
+
+        #expect(packets[0] as? Unsubscribe == unsubPacket)
+        #expect(
+            packets[1] as? Unsuback
+                == Unsuback(
+                    packetId: unsubPacket.varHeader.packetId, properties: UnsubackProperties(),
+                    reasonCodes: [.success]))
+    }
+
+    @Test("v5 Unsub from invalid topic", .enabled(if: TestEnv.host != nil))
+    func v5testUnsubInvalidTopic() async {
+        let host = TestEnv.host!
+        let client = MQTTClientV5(
+            clientId: "test-unsub2-v5", host: host, port: 1883, config: .init())
+
+        let _ = try! await withTimeout(seconds: 1) {
+            try await client.connect()
+        }
+
+        let _ = try! await withTimeout(seconds: 1) {
+            try? await client.subscribe(to: [.init(topic: "test/unsub", qos: .AtMostOnce)])
+        }
+
+        await #expect(
+            throws: MQTTError.protocolViolation(
+                .operationRejected(reasonCode: 0x11, operation: .UNSUBACK))
+        ) {
+            try await client.unsubscribe(from: ["doesnotexist"])
+        }
+
+        await client.stop()
+    }
+
+    @Test("v5 QoS 0 publish and subscribe", .enabled(if: TestEnv.host != nil)) func v5qos0PubSub()
+        async
+    {
+        let host = TestEnv.host!
+        let subscriber: MQTTClientV5 = .init(
+            clientId: "test-sub-v5", host: host, port: 1883, config: .init())
+        let publisher: MQTTClientV5 = .init(
+            clientId: "test-pub-v5", host: host, port: 1883, config: .init())
+
+        let _ = try! await withTimeout(seconds: 1) {
+            try await publisher.connect()
+        }
+
+        let _ = try! await withTimeout(seconds: 1) {
+            try? await subscriber.connect()
+        }
+
+        let _ = try! await withTimeout(seconds: 1) {
+            try? await subscriber.subscribe(to: [.init(topic: "test/topic", qos: .AtMostOnce)])
+        }
+
+        let packetTask = Task {
+            for await event in subscriber.eventStream {
+                switch event {
+                case .received(let packet):
+                    switch packet {
+                    case .publish(let publish):
+                        return publish
+                    default:
+                        break
+                    }
+                default:
+                    break
+                }
+            }
+
+            throw TestError.emptyPacketStream
+        }
+
+        let pubPacket = try! Publish(
+            topicName: "test/topic", message: "hello", qos: .AtMostOnce,
+            properties: PublishProperties())
+
+        try! await publisher.publish(message: "hello", qos: .AtMostOnce, topic: "test/topic")
+
+        let packet = try! await withTimeout(seconds: 5) {
+            try await packetTask.value
+        }
+
+        await publisher.stop()
+        await subscriber.stop()
+
+        #expect(packet == pubPacket)
+    }
 
     // @Test("v5 QoS 1 publish and subscribe", .enabled(if: TestEnv.host != nil)) func v5qos1PubSub()
     //     async throws

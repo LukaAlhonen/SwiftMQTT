@@ -24,9 +24,7 @@ public struct PublishProperties: Properties {
 
         return p
     }
-}
 
-extension PublishProperties {
     public init(
         payloadFormatIndicator: Byte? = nil,
         messageExpiryInterval: UInt32? = nil,

@@ -11,9 +11,7 @@ public struct SubscribeProperties: Properties {
 
         return p
     }
-}
 
-extension SubscribeProperties {
     public init(subscriptionIdentifier: UInt? = nil, userProperties: [(String, String)]? = nil) {
         if let subscriptionIdentifier {
             self.subscriptionIdentifier = Property.subscriptionIdentifier(subscriptionIdentifier)

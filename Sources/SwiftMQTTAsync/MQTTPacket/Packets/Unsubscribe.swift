@@ -6,9 +6,7 @@ public struct UnsubscribeProperties: Properties {
         for property in self.userProperties { p.append(property) }
         return p
     }
-}
 
-extension UnsubscribeProperties {
     public init(userProperties: [(String, String)]? = nil) {
         if let userProperties {
             for (key, value) in userProperties {
