@@ -406,6 +406,8 @@ struct MQTTClientTestsV5 {
                         packets.append(packet)
                         return packets
                     }
+                case .error(let error):
+                    print("Error: \(error)")
                 default:
                     break
                 }
@@ -424,14 +426,14 @@ struct MQTTClientTestsV5 {
             try await packetTask.value
         }
 
-        await publisher.stop()
-        await subscriber.stop()
-
         let testPublish = try! Publish(
             topicName: "test/topic1/v5", message: "hello", packetId: packetId, qos: .AtLeastOnce,
             properties: PublishProperties())
         #expect(packets[0] as? Publish == testPublish)
         #expect(packets[1] as? Puback == Puback(packetId: packetId))
+
+        await publisher.stop()
+        await subscriber.stop()
     }
 
     @Test("v5 QoS 2 publish and subscribe", .enabled(if: TestEnv.host != nil)) func v5qos2PubSub()

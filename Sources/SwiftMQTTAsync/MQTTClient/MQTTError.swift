@@ -3,6 +3,7 @@ enum MQTTError: Error, Equatable {
     case protocolViolation(ProtocolError)
     case timeout(TimeoutKind)
     case unexpectedError(String)
+    case subscriptionRejected(TopicFilter)
 }
 
 enum ConnectionError: Error, Equatable {
@@ -22,6 +23,7 @@ enum ProtocolError: Error, Equatable {
     case unknownPacketId(packetId: UInt16)
     case invalidState(expected: String, acutal: String)
     case operationRejected(reasonCode: Byte, operation: MQTTControlPacketType)
+    case unexpectedPublish(topic: String)
 }
 
 enum MalformedPacketReason: Error, Equatable {

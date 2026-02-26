@@ -6,8 +6,11 @@ actor MQTTSession {
 
     let commandBus: MQTTEventBus<MQTTInternalCommand>
 
-    private var subscriptions: [TopicFilter] = []
-    private var subs: [(SubscribeProperties?, [TopicFilter])] = []
+    private var inflightSubscriptions: [UInt16: ([TopicFilter], SubscribeProperties?)] = [:]
+    // topic string, qos, properties
+    private var subscriptions: [String: (QoS, SubscribeProperties?)]
+    private var inflightUnsubs: [UInt16: [String]] = [:]
+
     private var keepAliveTask: Task<Void, Never>?
     private var keepAliveCont: CheckedContinuation<Void, Never>?
 
@@ -29,9 +32,9 @@ actor MQTTSession {
         self.commandBus = commandBus
     }
 
-    func getSubscriptions() -> [(SubscribeProperties?, [TopicFilter])] {
-        // return self.subscriptions
-        return self.subs
+    func getSubscriptions() -> [([TopicFilter], SubscribeProperties?)] {
+
+        // return Array(self.subscriptions.values)
     }
 
     func handle(_ event: MQTTInternalEvent) {
@@ -39,7 +42,6 @@ actor MQTTSession {
         case .send(let packet):
             self.handleSend(packet: packet)
         case .packet(let packet):
-            self.eventBus.emit(.received(packet))
             self.handlePacket(packet: packet)
         case .connectionError(let error):
             self.eventBus.emit(.error(error))
@@ -51,6 +53,7 @@ actor MQTTSession {
     }
 
     private func handlePacket(packet: MQTTPacket) {
+        self.eventBus.emit(.received(packet))
         switch packet {
         case .puback(let puback):
             self.handlePuback(puback)
@@ -133,9 +136,9 @@ extension MQTTSession {
                         reasonCode: .malformedPacket))
                 return
             }
-            // should define separate timeout for publish in config
             let timeoutTask = TimeoutTask(
-                timeout: 10, kind: .publish(packetId: packetId, qos: .ExactlyOnce))
+                timeout: self.config.publishTimeout,
+                kind: .publish(packetId: packetId, qos: .ExactlyOnce))
             timeoutTask.start()
             self.activeTasks[packetId] = InflightTask(
                 state: .publishQoS2(.publishSent), timeout: timeoutTask)
@@ -149,7 +152,8 @@ extension MQTTSession {
             }
 
             let timeoutTask = TimeoutTask(
-                timeout: 10, kind: .publish(packetId: packetId, qos: .AtLeastOnce))
+                timeout: self.config.publishTimeout,
+                kind: .publish(packetId: packetId, qos: .AtLeastOnce))
             timeoutTask.start()
             self.activeTasks[packetId] = InflightTask(
                 state: .publishQoS1(.publishSent), timeout: timeoutTask)
@@ -160,9 +164,9 @@ extension MQTTSession {
 
     private func handleSendPubrel(_ pubrel: Pubrel) {
         let packetId = pubrel.varHeader.packetId
-        // TODO: set timout in config
         let timeoutTask = TimeoutTask(
-            timeout: 10, kind: .publish(packetId: packetId, qos: .ExactlyOnce))
+            timeout: self.config.publishTimeout,
+            kind: .publish(packetId: packetId, qos: .ExactlyOnce))
         timeoutTask.start()
         self.activeTasks[packetId] = InflightTask(
             state: .publishQoS2(.pubRelSent), timeout: timeoutTask)
@@ -205,11 +209,11 @@ extension MQTTSession {
         let packetId = subscribe.varHeader.packetId
         let topicFilters = subscribe.payload.topics
         let properties = subscribe.varHeader.properties
-        self.subscriptions.append(contentsOf: topicFilters)
-        self.subs.append((properties, topicFilters))
+        self.inflightSubscriptions[packetId] = (topicFilters, properties)
+        // register subscriptions
 
-        // TODO: Define duration in config
-        let timeoutTask = TimeoutTask(timeout: 10, kind: .subscribe(packetId: packetId))
+        let timeoutTask = TimeoutTask(
+            timeout: self.config.subscribeTimeout, kind: .subscribe(packetId: packetId))
         timeoutTask.start()
         self.activeTasks[packetId] = InflightTask(
             state: .subscribe(.SubscribeSent), timeout: timeoutTask)
@@ -229,17 +233,21 @@ extension MQTTSession {
 
     private func handleSendUnsubscribe(_ unsub: Unsubscribe) {
         let packetId = unsub.varHeader.packetId
-        // TODO: define duration in config
-        let timeoutTask = TimeoutTask(timeout: 10, kind: .unsub(packetId: packetId))
+        let timeoutTask = TimeoutTask(
+            timeout: self.config.subscribeTimeout, kind: .unsub(packetId: packetId))
         timeoutTask.start()
         self.activeTasks[packetId] = InflightTask(
             state: .unsubscribe(.unsubSent), timeout: timeoutTask)
+
+        // track inflight unsub so we can handle return codes
+        self.inflightUnsubs[packetId] = unsub.payload.topics
     }
 }
 
 // MARK: receive handlers
 extension MQTTSession {
     private func handleConnack(_ connack: Connack) {
+        self.eventBus.emit(.received(MQTTPacket.connack(connack)))
         // v3
         if let returnCode = connack.varHeader.connectReturnCode {
             if case .ConnectionAccepted = returnCode {
@@ -280,6 +288,7 @@ extension MQTTSession {
     }
 
     private func handlePingresp(_ pingresp: Pingresp) {
+        self.eventBus.emit(.received(MQTTPacket.pingresp(pingresp)))
         guard let pingrespTask = self.pingrespTask else {
             self.commandBus.emit(
                 .disconnect(
@@ -301,11 +310,49 @@ extension MQTTSession {
                     reasonCode: .protocolError))
             return
         }
+
+        self.eventBus.emit(.received(MQTTPacket.suback(suback)))
+
+        // if a sub was rejected, notify user
+        var index = 0
+
+        guard let inflightSub = self.inflightSubscriptions.removeValue(forKey: packetId) else {
+            self.commandBus.emit(
+                .disconnect(
+                    MQTTError.unexpectedError("infligt sub should exist for packetId: \(packetId)"))
+            )
+            return
+        }
+        let topics = inflightSub.0
+
+        for returnCode in suback.payload.returnCodes {
+            if case .Rejected = returnCode {
+                let topic = topics[index]
+                self.eventBus.emit(.error(MQTTError.subscriptionRejected(topic)))
+            }
+            index += 1
+        }
+
         subackTask.timeout?.stop()
     }
 
     private func handlePublish(_ publish: Publish) {
-        // TODO: check that topic is subscribed to and then emit recevive event
+        // check that topic is actually subscribed to
+        let topic = publish.variableHeader.topicName
+        if !self.inflightSubscriptions.values.contains(where: { (topicFilters, _) in
+            topicFilters.contains { $0.topic == topic }
+        }) {
+            self.commandBus.emit(
+                .disconnect(MQTTError.protocolViolation(.unexpectedPublish(topic: topic))))
+            return
+        }
+        // guard self.subscribedTopics[topic] != nil else {
+        //     self.commandBus.emit(
+        //         .disconnect(MQTTError.protocolViolation(.unexpectedPublish(topic: topic))))
+        //     return
+        // }
+        self.eventBus.emit(.received(MQTTPacket.publish(publish)))
+
         switch publish.qos {
         case .ExactlyOnce:
             guard let packetId = publish.variableHeader.packetId else {
@@ -356,6 +403,8 @@ extension MQTTSession {
             return
         }
 
+        self.eventBus.emit(.received(MQTTPacket.puback(puback)))
+
         inflightTask.timeout?.stop(with: result)
     }
 
@@ -369,6 +418,8 @@ extension MQTTSession {
             return
         }
 
+        self.eventBus.emit(.received(MQTTPacket.pubrec(pubrec)))
+
         inflightTask.timeout?.stop()
     }
 
@@ -381,6 +432,9 @@ extension MQTTSession {
                     reasonCode: .protocolError))
             return
         }
+
+        self.eventBus.emit(.received(MQTTPacket.pubrel(pubrel)))
+
         self.commandBus.emit(.send(Pubcomp(packetId: packetId)))
     }
 
@@ -394,17 +448,41 @@ extension MQTTSession {
             return
         }
 
+        self.eventBus.emit(.received(MQTTPacket.pubcomp(pubcomp)))
+
         inflighTask.timeout?.stop()
     }
 
-    // TODO: Should propably remove sub on successful unsub
     private func handleUnsuback(_ unsuback: Unsuback) {
         // v5
+        let packetId = unsuback.varHeader.packetId
+        guard let inflightTask = self.activeTasks.removeValue(forKey: packetId) else {
+            self.commandBus.emit(
+                .disconnect(
+                    MQTTError.protocolViolation(.unexpectedPacket(packet: .UNSUBACK)),
+                    reasonCode: .protocolError))
+            return
+        }
+
         var result: Result<Void, Error> = .success(())
+        guard let topics = self.inflightUnsubs.removeValue(forKey: packetId) else {
+            self.commandBus.emit(
+                .disconnect(
+                    MQTTError.unexpectedError(
+                        "inflight unsubs should contain packetId: \(packetId)")
+                ))
+            return
+        }
         if let reasonCodes = unsuback.payload?.reasonCodes {
+            // v5
+            var index = 0
             for reasonCode in reasonCodes {
                 if case .success = reasonCode {
                     result = .success(())
+
+                    // remove topic from active subscriptions
+                    let topic = topics[index]
+                    let _ = self.subscribedTopics.removeValue(forKey: topic)
                 } else {
                     let error =
                         MQTTError.protocolViolation(
@@ -414,17 +492,16 @@ extension MQTTSession {
                     result = .failure(error)
                     self.eventBus.emit(.error(error))
                 }
+                index += 1
+            }
+        } else {
+            // v3
+            for topic in topics {
+                let _ = self.subscribedTopics.removeValue(forKey: topic)
             }
         }
 
-        let packetId = unsuback.varHeader.packetId
-        guard let inflightTask = self.activeTasks.removeValue(forKey: packetId) else {
-            self.commandBus.emit(
-                .disconnect(
-                    MQTTError.protocolViolation(.unexpectedPacket(packet: .UNSUBACK)),
-                    reasonCode: .protocolError))
-            return
-        }
+        self.eventBus.emit(.received(MQTTPacket.unsuback(unsuback)))
 
         inflightTask.timeout?.stop(with: result)
     }
@@ -569,5 +646,16 @@ extension MQTTSession {
         self.keepAliveTask = nil
         guard let cont = self.keepAliveCont else { return }
         startKeepAlive(cont: cont)
+    }
+}
+
+// MARK: helpers
+extension MQTTSession {
+    private func registerSubscriptions(
+        topicFilters: [TopicFilter], properties: SubscribeProperties?
+    ) {
+        for topicFilter in topicFilters {
+            self.subscriptions[topicFilter.topic] = (topicFilter.qos, properties)
+        }
     }
 }
