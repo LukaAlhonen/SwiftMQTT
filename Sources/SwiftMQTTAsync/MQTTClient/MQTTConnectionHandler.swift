@@ -6,7 +6,6 @@ final class MQTTConnectionHandler: ChannelInboundHandler, @unchecked Sendable {
     private var parser: PacketParser
 
     var handleReceive: ((MQTTPacket) -> Void)?
-    var handleSend: ((any MQTTControlPacket) -> Void)?
     var handleError: ((any Error) -> Void)?
     var handleChannelActive: (() -> Void)?
     var handleChannelInactive: (() -> Void)?

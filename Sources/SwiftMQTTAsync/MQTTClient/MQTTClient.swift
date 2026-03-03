@@ -265,10 +265,6 @@ extension MQTTClient {
     }
 
     private func subscribeToTopics() async throws {
-        // let topics = await self.session.getSubscriptions()
-        // if topics.count <= 0 { return }
-
-        // try await self.subscribe(to: topics)
         let subs = await self.session.getSubscriptions()
         if subs.count <= 0 { return }
         for (properties, topicFilters) in subs {
