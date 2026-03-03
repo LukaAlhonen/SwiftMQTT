@@ -47,10 +47,6 @@ actor MQTTConnection {
             self.eventBus.emit(.packet(packet))
         }
 
-        handler.handleSend = { packet in
-            self.eventBus.emit(.send(packet))
-        }
-
         let bootstrap = ClientBootstrap(group: self.eventLoopGroup)
             .channelInitializer { channel in
                 channel.pipeline.addHandler(handler)
@@ -76,18 +72,6 @@ actor MQTTConnection {
         buffer.writeBytes(bytes)
 
         try await channel.channel.writeAndFlush(buffer)
-    }
-
-    func schedule<T>(_ body: @escaping (ChannelHandlerContext, MQTTSession2) -> EventLoopFuture<T>)
-        async throws -> T
-    {
-        guard let channel = self.channel?.channel, let handler = self.handler else {
-            throw MQTTError.connectionError(.disconnected)
-        }
-
-        return try await channel.eventLoop.submit {
-            body(handler.context)
-        }
     }
 
     func close() async throws {

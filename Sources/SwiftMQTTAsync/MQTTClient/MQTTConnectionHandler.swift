@@ -1,25 +1,17 @@
 import NIOCore
 
-final class MQTTConnectionHandler: ChannelDuplexHandler, @unchecked Sendable {
+final class MQTTConnectionHandler: ChannelInboundHandler, @unchecked Sendable {
     typealias InboundIn = ByteBuffer
-    typealias OutboundIn = any MQTTControlPacket
-    typealias OutboundOut = ByteBuffer
 
     private var parser: PacketParser
-    private(set) var context: ChannelHandlerContext!
 
     var handleReceive: ((MQTTPacket) -> Void)?
-    var handleSend: ((any MQTTControlPacket) -> Void)?
     var handleError: ((any Error) -> Void)?
     var handleChannelActive: (() -> Void)?
     var handleChannelInactive: (() -> Void)?
 
     init(version: Version) {
         self.parser = PacketParser(version: version)
-    }
-
-    func handlerAdded(context: ChannelHandlerContext) {
-
     }
 
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -29,18 +21,6 @@ final class MQTTConnectionHandler: ChannelDuplexHandler, @unchecked Sendable {
         for packet in packets {
             handleReceive?(packet)
         }
-    }
-
-    func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
-        let packet = unwrapOutboundIn(data)
-
-        handleSend?(packet)
-
-        let bytes = packet.encode()
-        var buffer = context.channel.allocator.buffer(capacity: bytes.count)
-        buffer.writeBytes(bytes)
-
-        context.write(NIOAny(buffer), promise: promise)
     }
 
     func channelActive(context: ChannelHandlerContext) {

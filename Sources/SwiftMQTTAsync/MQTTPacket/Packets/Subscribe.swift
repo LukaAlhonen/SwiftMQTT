@@ -1,4 +1,4 @@
-public struct SubscribeProperties: Properties {
+public struct SubscribeProperties: Properties, Hashable {
     public var subscriptionIdentifier: Property?
     public var userProperties: [Property] = []
 

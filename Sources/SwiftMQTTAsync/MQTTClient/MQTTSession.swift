@@ -8,7 +8,7 @@ actor MQTTSession {
 
     private var inflightSubscriptions: [UInt16: ([TopicFilter], SubscribeProperties?)] = [:]
     // topic string, qos, properties
-    private var subscriptions: [String: (QoS, SubscribeProperties?)]
+    private var subscriptions: [String: (QoS, SubscribeProperties?)] = [:]
     private var inflightUnsubs: [UInt16: [String]] = [:]
 
     private var keepAliveTask: Task<Void, Never>?
@@ -32,9 +32,19 @@ actor MQTTSession {
         self.commandBus = commandBus
     }
 
-    func getSubscriptions() -> [([TopicFilter], SubscribeProperties?)] {
+    func getSubscriptions() -> [SubscribeProperties?: [TopicFilter]] {
+        var subs: [SubscribeProperties?: [TopicFilter]] = [:]
+        for (key, value) in subscriptions {
+            let subProps = value.1
+            let topicFilter = TopicFilter(topic: key, qos: value.0)
+            if subs[subProps] == nil {
+                subs[subProps] = [topicFilter]
+            } else {
+                subs[subProps]?.append(topicFilter)
+            }
+        }
 
-        // return Array(self.subscriptions.values)
+        return subs
     }
 
     func handle(_ event: MQTTInternalEvent) {
@@ -53,7 +63,7 @@ actor MQTTSession {
     }
 
     private func handlePacket(packet: MQTTPacket) {
-        self.eventBus.emit(.received(packet))
+        // self.eventBus.emit(.received(packet))
         switch packet {
         case .puback(let puback):
             self.handlePuback(puback)
@@ -210,7 +220,10 @@ extension MQTTSession {
         let topicFilters = subscribe.payload.topics
         let properties = subscribe.varHeader.properties
         self.inflightSubscriptions[packetId] = (topicFilters, properties)
-        // register subscriptions
+        // register subscriptions before suback received, delete if suback times out or rejects sub
+        for filter in topicFilters {
+            self.subscriptions[filter.topic] = (filter.qos, properties)
+        }
 
         let timeoutTask = TimeoutTask(
             timeout: self.config.subscribeTimeout, kind: .subscribe(packetId: packetId))
@@ -328,6 +341,7 @@ extension MQTTSession {
         for returnCode in suback.payload.returnCodes {
             if case .Rejected = returnCode {
                 let topic = topics[index]
+                self.subscriptions.removeValue(forKey: topic.topic)  // remove topic from active subscriptions
                 self.eventBus.emit(.error(MQTTError.subscriptionRejected(topic)))
             }
             index += 1
@@ -339,18 +353,11 @@ extension MQTTSession {
     private func handlePublish(_ publish: Publish) {
         // check that topic is actually subscribed to
         let topic = publish.variableHeader.topicName
-        if !self.inflightSubscriptions.values.contains(where: { (topicFilters, _) in
-            topicFilters.contains { $0.topic == topic }
-        }) {
+        guard self.subscriptions[topic] != nil else {
             self.commandBus.emit(
                 .disconnect(MQTTError.protocolViolation(.unexpectedPublish(topic: topic))))
             return
         }
-        // guard self.subscribedTopics[topic] != nil else {
-        //     self.commandBus.emit(
-        //         .disconnect(MQTTError.protocolViolation(.unexpectedPublish(topic: topic))))
-        //     return
-        // }
         self.eventBus.emit(.received(MQTTPacket.publish(publish)))
 
         switch publish.qos {
@@ -482,7 +489,7 @@ extension MQTTSession {
 
                     // remove topic from active subscriptions
                     let topic = topics[index]
-                    let _ = self.subscribedTopics.removeValue(forKey: topic)
+                    let _ = self.subscriptions.removeValue(forKey: topic)
                 } else {
                     let error =
                         MQTTError.protocolViolation(
@@ -497,7 +504,7 @@ extension MQTTSession {
         } else {
             // v3
             for topic in topics {
-                let _ = self.subscribedTopics.removeValue(forKey: topic)
+                let _ = self.subscriptions.removeValue(forKey: topic)
             }
         }
 
