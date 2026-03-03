@@ -1,6 +1,6 @@
 import NIOCore
 
-public struct Property: Sendable, Equatable {
+public struct Property: Sendable, Equatable, Hashable {
     public let identifier: PropertyIdentifier
     public let value: PropertyValue
 
@@ -420,7 +420,7 @@ extension Property {
     }
 }
 
-public enum PropertyValue: Sendable, Equatable {
+public enum PropertyValue: Sendable, Equatable, Hashable {
     case byte(Byte)
     case fourByteInt(UInt32)
     case twoByteInt(UInt16)

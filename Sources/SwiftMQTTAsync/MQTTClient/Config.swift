@@ -4,15 +4,23 @@ public struct Config: Sendable {
     public let keepAlive: UInt16
     public let pingTimeout: UInt16
     public let connTimeout: UInt16
-    public let maxRetries: UInt16 // max connect retries
+    public let maxRetries: UInt16  // max connect retries
     public let cleanSession: Bool
+    public let subscribeTimeout: UInt16
+    public let publishTimeout: UInt16
 
-    public init(keepAlive: UInt16 = 60, pingTimeout: UInt16 = 5, connTimeout: UInt16 = 30, maxRetries: UInt16 = 0, cleanSession: Bool = true) {
+    public init(
+        keepAlive: UInt16 = 60, pingTimeout: UInt16 = 5, connTimeout: UInt16 = 30,
+        maxRetries: UInt16 = 0, cleanSession: Bool = true, subscribeTimeout: UInt16 = 10,
+        publishTimeout: UInt16 = 10
+    ) {
         self.keepAlive = keepAlive
         self.pingTimeout = pingTimeout
         self.connTimeout = connTimeout
         self.maxRetries = maxRetries
         self.cleanSession = cleanSession
+        self.subscribeTimeout = subscribeTimeout
+        self.publishTimeout = publishTimeout
     }
 }
 

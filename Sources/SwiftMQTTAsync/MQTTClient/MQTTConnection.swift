@@ -4,6 +4,7 @@ import NIOPosix
 actor MQTTConnection {
     private var channel: NIOAsyncChannel<ByteBuffer, ByteBuffer>?
     private let eventLoopGroup: EventLoopGroup
+    private var handler: MQTTConnectionHandler?
 
     private let host: String
     private let port: Int
@@ -12,7 +13,9 @@ actor MQTTConnection {
 
     private let eventBus: MQTTEventBus<MQTTInternalEvent>
 
-    public init(host: String, port: Int, eventBus: MQTTEventBus<MQTTInternalEvent>, version: Version) {
+    public init(
+        host: String, port: Int, eventBus: MQTTEventBus<MQTTInternalEvent>, version: Version
+    ) {
         if port <= 0 { fatalError("Invalid port number: \(port)") }
 
         self.host = host
@@ -44,11 +47,6 @@ actor MQTTConnection {
             self.eventBus.emit(.packet(packet))
         }
 
-        handler.handleSend = { packet in
-            self.eventBus.emit(.send(packet))
-        }
-
-
         let bootstrap = ClientBootstrap(group: self.eventLoopGroup)
             .channelInitializer { channel in
                 channel.pipeline.addHandler(handler)
@@ -64,6 +62,7 @@ actor MQTTConnection {
             }
 
         self.channel = channel
+        self.handler = handler
     }
 
     func send(packet: any MQTTControlPacket) async throws {
